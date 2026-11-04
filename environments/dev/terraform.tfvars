@@ -30,3 +30,6 @@ vms = {
 
 lb_flavor       = "small"
 enable_admin_ip = true
+
+# ID du projet Public Cloud (visible dans l'espace client OVH) : à remplir demain
+ovh_project_id = "A_REMPLIR"

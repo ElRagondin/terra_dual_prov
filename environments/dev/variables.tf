@@ -65,3 +65,8 @@ variable "enable_admin_ip" {
   type        = bool
   default     = false
 }
+
+variable "ovh_project_id" {
+  description = "ID du projet Public Cloud OVH"
+  type        = string
+}

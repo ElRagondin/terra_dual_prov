@@ -77,3 +77,13 @@ output "admin_ssh" {
   description = "Commande SSH vers web-1 (null si enable_admin_ip = false)"
   value       = one(openstack_networking_floatingip_v2.admin[*].address) != null ? "ssh ubuntu@${one(openstack_networking_floatingip_v2.admin[*].address)}" : null
 }
+
+module "storage" {
+  source      = "../../modules/storage"
+  name_prefix = local.name_prefix
+  project_id  = var.ovh_project_id
+}
+
+output "diagnostics_bucket" {
+  value = module.storage.bucket_name
+}
