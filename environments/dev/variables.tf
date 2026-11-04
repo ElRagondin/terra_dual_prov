@@ -30,3 +30,26 @@ variable "security_groups" {
     }))
   }))
 }
+
+variable "vms" {
+  description = "VMs de l'environnement : sous-réseaux et security group désignés par leur rôle"
+  type = map(object({
+    count          = number
+    flavor         = string
+    subnets        = list(string)
+    security_group = string
+    user_data_file = optional(string)
+  }))
+}
+
+variable "image_name" {
+  description = "Image OVH des VMs"
+  type        = string
+  default     = "Ubuntu 24.04"
+}
+
+variable "public_key_path" {
+  description = "Chemin de la clé publique SSH injectée dans les VMs"
+  type        = string
+  default     = "~/.ssh/id_ed25519.pub"
+}

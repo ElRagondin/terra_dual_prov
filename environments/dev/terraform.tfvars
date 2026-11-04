@@ -22,3 +22,8 @@ security_groups = {
     }
   }
 }
+
+vms = {
+  web = { count = 2, flavor = "d2-2", subnets = ["web"], security_group = "web", user_data_file = "cloud-init/web.yaml" }
+  db  = { count = 1, flavor = "d2-2", subnets = ["db"], security_group = "db" }
+}
