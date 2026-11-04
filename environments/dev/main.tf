@@ -44,3 +44,36 @@ output "security_group_ids" {
 output "vm_private_ips" {
   value = module.compute.private_ips
 }
+
+module "loadbalancer" {
+  source           = "../../modules/loadbalancer"
+  name_prefix      = local.name_prefix
+  vip_subnet_id    = module.network.subnet_ids["web"]
+  member_subnet_id = module.network.subnet_ids["web"]
+  flavor_name      = var.lb_flavor
+
+  # Seules les VMs web sont ajoutées au pool
+  members = { for name, ip in module.compute.private_ips : name => ip if startswith(name, "web-") }
+}
+
+# IP d'administration SSH sur web-1, créée seulement si enable_admin_ip = true
+resource "openstack_networking_floatingip_v2" "admin" {
+  count       = var.enable_admin_ip ? 1 : 0
+  pool        = "Ext-Net"
+  description = "${local.name_prefix} - acces SSH admin"
+}
+
+resource "openstack_networking_floatingip_associate_v2" "admin" {
+  count       = var.enable_admin_ip ? 1 : 0
+  floating_ip = openstack_networking_floatingip_v2.admin[0].address
+  port_id     = module.compute.port_ids["web-1-nic0"]
+}
+
+output "app_url" {
+  value = module.loadbalancer.url
+}
+
+output "admin_ssh" {
+  description = "Commande SSH vers web-1 (null si enable_admin_ip = false)"
+  value       = one(openstack_networking_floatingip_v2.admin[*].address) != null ? "ssh ubuntu@${one(openstack_networking_floatingip_v2.admin[*].address)}" : null
+}
