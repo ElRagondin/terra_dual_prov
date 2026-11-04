@@ -1,0 +1,10 @@
+# Fichiers locaux de Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Secrets : jamais dans Git
+*.auto.tfvars
+secrets.tfvars
+.secrets/
