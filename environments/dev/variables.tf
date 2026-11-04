@@ -53,3 +53,15 @@ variable "public_key_path" {
   type        = string
   default     = "~/.ssh/id_ed25519.pub"
 }
+
+variable "lb_flavor" {
+  description = "Taille du Load Balancer (small, medium, large)"
+  type        = string
+  default     = "small"
+}
+
+variable "enable_admin_ip" {
+  description = "Ajoute une IP publique sur web-1 pour l'administration SSH (à désactiver en prod)"
+  type        = bool
+  default     = false
+}
