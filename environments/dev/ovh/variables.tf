@@ -48,11 +48,6 @@ variable "image_name" {
   default     = "Ubuntu 24.04"
 }
 
-variable "public_key_path" {
-  description = "Chemin de la clé publique SSH injectée dans les VMs"
-  type        = string
-  default     = "~/.ssh/id_ed25519.pub"
-}
 
 variable "lb_flavor" {
   description = "Taille du Load Balancer (small, medium, large)"
@@ -81,4 +76,14 @@ variable "enable_https" {
   description = "Active le HTTPS sur le Load Balancer"
   type        = bool
   default     = false
+}
+
+variable "public_key" {
+  description = "Clé publique SSH injectée dans les VMs (fournie par le workspace HCP Terraform)"
+  type        = string
+
+  validation {
+    condition     = startswith(trimspace(var.public_key), "ssh-")
+    error_message = "public_key doit être une clé publique SSH (ssh-ed25519 ... ou ssh-rsa ...)."
+  }
 }

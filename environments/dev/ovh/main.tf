@@ -19,7 +19,7 @@ module "compute" {
   name_prefix = local.name_prefix
   network_id  = module.network.network_id
   image_name  = var.image_name
-  public_key  = file(pathexpand(var.public_key_path))
+  public_key  = var.public_key
 
   # Traduction des rôles ("web", "db") en IDs fournis par les autres modules
   vm_groups = {
