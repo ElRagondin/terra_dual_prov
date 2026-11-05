@@ -66,3 +66,13 @@ variable "enable_admin_ip" {
   default     = false
 }
 
+
+variable "volumes" {
+  description = "Volumes de données : clé = nom, avec taille (Go), type et VM cible (nom logique, ex : db-1)"
+  type = map(object({
+    size     = number
+    type     = optional(string, "classic")
+    instance = string
+  }))
+  default = {}
+}

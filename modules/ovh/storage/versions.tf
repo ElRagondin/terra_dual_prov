@@ -1,10 +1,7 @@
 terraform {
   required_providers {
-    ovh = {
-      source = "ovh/ovh"
-    }
-    random = {
-      source = "hashicorp/random"
+    openstack = {
+      source = "terraform-provider-openstack/openstack"
     }
   }
 }

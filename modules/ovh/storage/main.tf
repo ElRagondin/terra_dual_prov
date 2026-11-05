@@ -1,24 +1,16 @@
-# Suffixe aléatoire : un nom de bucket doit être unique
-resource "random_id" "suffix" {
-  byte_length = 3
+# Équivalent d'un disque de données managé Azure : stockage persistant, indépendant de la VM
+resource "openstack_blockstorage_volume_v3" "this" {
+  for_each = var.volumes
+
+  name        = "${var.name_prefix}-vol-${each.key}"
+  size        = each.value.size
+  volume_type = each.value.type
 }
 
-# Équivalent du Storage Account Azure (stockage des diagnostics)
-resource "ovh_cloud_storage_object_bucket" "diagnostics" {
-  service_name = var.project_id
-  region       = var.region
-  name         = "${var.name_prefix}-diag-${random_id.suffix.hex}"
+# Attachement du volume à sa VM
+resource "openstack_compute_volume_attach_v2" "this" {
+  for_each = var.volumes
 
-  # Chiffrement côté serveur : les données sont chiffrées au repos
-  encryption = {
-    algorithm = "AES256"
-  }
-
-  # Ternaire : versioning activé ou non selon la variable
-  versioning = {
-    status = var.versioning ? "ENABLED" : "DISABLED"
-  }
-
-  # object_lock volontairement non défini : bug connu du provider v2.24.0
-  # (github.com/ovh/terraform-provider-ovh/issues/1568)
+  instance_id = each.value.instance_id
+  volume_id   = openstack_blockstorage_volume_v3.this[each.key].id
 }

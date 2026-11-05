@@ -28,7 +28,7 @@ module "compute" {
       flavor             = vm.flavor
       subnet_ids         = [for s in vm.subnets : module.network.subnet_ids[s]]
       security_group_ids = [module.security.security_group_ids[vm.security_group]]
-      user_data          = vm.user_data_file != null ? file("${path.module}/${vm.user_data_file}") : null
+      user_data          = vm.user_data_file != null ? templatefile("${path.module}/${vm.user_data_file}", { web_cidr = var.subnets["web"].cidr }) : null
     }
   }
 }
@@ -81,3 +81,21 @@ output "admin_ssh" {
 }
 
 
+
+module "storage" {
+  source      = "../../../modules/ovh/storage"
+  name_prefix = local.name_prefix
+
+  # Traduction du nom logique de la VM (db-1) en ID fourni par le module compute
+  volumes = {
+    for name, v in var.volumes : name => {
+      size        = v.size
+      type        = v.type
+      instance_id = module.compute.instance_ids[v.instance]
+    }
+  }
+}
+
+output "volume_ids" {
+  value = module.storage.volume_ids
+}
