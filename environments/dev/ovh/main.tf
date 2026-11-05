@@ -3,19 +3,19 @@ locals {
 }
 
 module "network" {
-  source      = "../../modules/network"
+  source      = "../../../modules/ovh/network"
   name_prefix = local.name_prefix
   subnets     = var.subnets
 }
 
 module "security" {
-  source          = "../../modules/security"
+  source          = "../../../modules/ovh/security"
   name_prefix     = local.name_prefix
   security_groups = var.security_groups
 }
 
 module "compute" {
-  source      = "../../modules/compute"
+  source      = "../../../modules/ovh/compute"
   name_prefix = local.name_prefix
   network_id  = module.network.network_id
   image_name  = var.image_name
@@ -46,7 +46,7 @@ output "vm_private_ips" {
 }
 
 module "loadbalancer" {
-  source           = "../../modules/loadbalancer"
+  source           = "../../../modules/ovh/loadbalancer"
   name_prefix      = local.name_prefix
   vip_subnet_id    = module.network.subnet_ids["web"]
   member_subnet_id = module.network.subnet_ids["web"]
@@ -79,7 +79,7 @@ output "admin_ssh" {
 }
 
 module "storage" {
-  source      = "../../modules/storage"
+  source      = "../../../modules/ovh/storage"
   name_prefix = local.name_prefix
   project_id  = var.ovh_project_id
 }
