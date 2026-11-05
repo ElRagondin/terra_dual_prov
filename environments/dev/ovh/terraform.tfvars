@@ -25,9 +25,13 @@ security_groups = {
 
 vms = {
   web = { count = 2, flavor = "c3-4", subnets = ["web"], security_group = "web", user_data_file = "cloud-init/web.yaml" }
-  db  = { count = 1, flavor = "c3-4", subnets = ["db"], security_group = "db" }
+  db  = { count = 1, flavor = "c3-4", subnets = ["db"], security_group = "db", user_data_file = "cloud-init/db.yaml.tftpl" }
 }
 
 lb_flavor       = "small"
 enable_admin_ip = true
 
+
+volumes = {
+  pgdata = { size = 10, type = "classic", instance = "db-1" }
+}

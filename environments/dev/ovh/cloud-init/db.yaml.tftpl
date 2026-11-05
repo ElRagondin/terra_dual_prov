@@ -1,0 +1,24 @@
+#cloud-config
+package_update: true
+runcmd:
+  - |
+    # 1. Attendre le volume de données (disque sans partition ni point de montage)
+    for i in $(seq 1 60); do
+      DISK=$(lsblk -dpno NAME,TYPE | awk '$2=="disk"{print $1}' | while read d; do
+        if [ "$(lsblk -no NAME "$d" | wc -l)" -eq 1 ] && [ -z "$(lsblk -no MOUNTPOINT "$d" | tr -d '[:space:]')" ]; then echo "$d"; fi
+      done | head -1)
+      [ -n "$DISK" ] && break
+      sleep 5
+    done
+    # 2. Formater seulement si le volume est vierge, puis monter
+    blkid "$DISK" || mkfs.ext4 -L pgdata "$DISK"
+    mkdir -p /var/lib/postgresql
+    echo "LABEL=pgdata /var/lib/postgresql ext4 defaults,nofail 0 2" >> /etc/fstab
+    mount -a
+    # 3. Installer PostgreSQL (ses données sont sur le volume)
+    DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql
+    # 4. Écouter sur le réseau privé, n'accepter que le sous-réseau web
+    PGCONF=$(ls -d /etc/postgresql/*/main)
+    sed -i "s/^#listen_addresses = 'localhost'/listen_addresses = '*'/" "$PGCONF/postgresql.conf"
+    echo "host all all ${web_cidr} scram-sha-256" >> "$PGCONF/pg_hba.conf"
+    systemctl restart postgresql
