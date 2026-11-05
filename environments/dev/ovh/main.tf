@@ -46,12 +46,14 @@ output "vm_private_ips" {
 }
 
 module "loadbalancer" {
-  depends_on       = [module.network]
-  source           = "../../../modules/ovh/loadbalancer"
-  name_prefix      = local.name_prefix
-  vip_subnet_id    = module.network.subnet_ids["web"]
-  member_subnet_id = module.network.subnet_ids["web"]
-  flavor_name      = var.lb_flavor
+  enable_https      = var.enable_https
+  health_check_path = "/health"
+  depends_on        = [module.network]
+  source            = "../../../modules/ovh/loadbalancer"
+  name_prefix       = local.name_prefix
+  vip_subnet_id     = module.network.subnet_ids["web"]
+  member_subnet_id  = module.network.subnet_ids["web"]
+  flavor_name       = var.lb_flavor
 
   # Seules les VMs web sont ajoutées au pool
   members = { for name, ip in module.compute.private_ips : name => ip if startswith(name, "web-") }
@@ -98,4 +100,8 @@ module "storage" {
 
 output "volume_ids" {
   value = module.storage.volume_ids
+}
+
+output "app_url_https" {
+  value = module.loadbalancer.https_url
 }

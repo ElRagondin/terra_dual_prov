@@ -12,3 +12,8 @@ output "loadbalancer_id" {
   description = "ID du Load Balancer"
   value       = openstack_lb_loadbalancer_v2.this.id
 }
+
+output "https_url" {
+  description = "URL HTTPS de l'application (null si enable_https = false)"
+  value       = var.enable_https ? "https://${openstack_networking_floatingip_v2.lb.address}" : null
+}
