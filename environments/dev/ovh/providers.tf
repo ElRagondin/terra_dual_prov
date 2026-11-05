@@ -1,4 +1,11 @@
 terraform {
+  cloud {
+    organization = "terra_dual_prov"
+    workspaces {
+      name = "dev-ovh"
+    }
+  }
+
   required_version = ">= 1.6"
   required_providers {
     openstack = {
