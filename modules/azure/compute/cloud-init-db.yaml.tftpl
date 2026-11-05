@@ -1,0 +1,47 @@
+#cloud-config
+runcmd:
+  - |
+    set -eu
+
+    disk=/dev/disk/azure/scsi1/lun0
+    mountpoint=/var/lib/postgresql
+
+    # Terraform attache le disque après la création de la VM.
+    for attempt in $(seq 1 120); do
+      [ ! -b "$disk" ] || break
+      sleep 5
+    done
+    if [ ! -b "$disk" ]; then
+      echo "Disque pgdata introuvable au LUN 0" >&2
+      exit 1
+    fi
+
+    # Formater uniquement un disque sans signature connue.
+    if [ -z "$(wipefs --noheadings --output TYPE "$disk")" ]; then
+      mkfs.ext4 -L pgdata "$disk"
+    fi
+
+    if [ "$(blkid -s TYPE -o value "$disk")" != "ext4" ] ||
+       [ "$(blkid -s LABEL -o value "$disk")" != "pgdata" ]; then
+      echo "Le disque au LUN 0 ne correspond pas au volume pgdata attendu" >&2
+      exit 1
+    fi
+
+    uuid=$(blkid -s UUID -o value "$disk")
+    mkdir -p "$mountpoint"
+    entry="UUID=$uuid $mountpoint ext4 defaults 0 2"
+    grep -Fxq "$entry" /etc/fstab || printf '%s\n' "$entry" >> /etc/fstab
+    mountpoint -q "$mountpoint" || mount "$mountpoint"
+
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y postgresql
+
+    for config_dir in /etc/postgresql/*/main; do
+      printf "listen_addresses = '*'\n" > "$config_dir/conf.d/10-listen.conf"
+      rule='host all all ${web_cidr} scram-sha-256'
+      grep -Fxq "$rule" "$config_dir/pg_hba.conf" ||
+        printf '%s\n' "$rule" >> "$config_dir/pg_hba.conf"
+    done
+
+    systemctl restart postgresql

@@ -1,0 +1,36 @@
+#cloud-config
+package_update: true
+packages:
+  - nginx
+  - openssl
+
+write_files:
+  - path: /etc/nginx/conf.d/app.conf
+    defer: true
+    content: |
+      server {
+        listen 80;
+        location = /health { return 200 "ok\n"; }
+        location / { return 301 https://$host$request_uri; }
+      }
+
+      server {
+        listen 443 ssl;
+        ssl_certificate     /etc/ssl/certs/app.crt;
+        ssl_certificate_key /etc/ssl/private/app.key;
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        root /var/www/html;
+        index index.html;
+      }
+
+runcmd:
+  - |
+    set -eu
+    openssl req -x509 -nodes -newkey rsa:2048 -days 365 \
+      -subj "/CN=$(hostname)" \
+      -keyout /etc/ssl/private/app.key -out /etc/ssl/certs/app.crt
+    chmod 600 /etc/ssl/private/app.key
+    printf '<h1>%s</h1>\n' "$(hostname)" > /var/www/html/index.html
+    rm -f /etc/nginx/sites-enabled/default
+    nginx -t
+    systemctl restart nginx
