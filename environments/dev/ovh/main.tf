@@ -46,6 +46,7 @@ output "vm_private_ips" {
 }
 
 module "loadbalancer" {
+  depends_on       = [module.network]
   source           = "../../../modules/ovh/loadbalancer"
   name_prefix      = local.name_prefix
   vip_subnet_id    = module.network.subnet_ids["web"]
@@ -64,6 +65,7 @@ resource "openstack_networking_floatingip_v2" "admin" {
 }
 
 resource "openstack_networking_floatingip_associate_v2" "admin" {
+  depends_on  = [module.network]
   count       = var.enable_admin_ip ? 1 : 0
   floating_ip = openstack_networking_floatingip_v2.admin[0].address
   port_id     = module.compute.port_ids["web-1-nic0"]
@@ -78,12 +80,4 @@ output "admin_ssh" {
   value       = one(openstack_networking_floatingip_v2.admin[*].address) != null ? "ssh ubuntu@${one(openstack_networking_floatingip_v2.admin[*].address)}" : null
 }
 
-module "storage" {
-  source      = "../../../modules/ovh/storage"
-  name_prefix = local.name_prefix
-  project_id  = var.ovh_project_id
-}
 
-output "diagnostics_bucket" {
-  value = module.storage.bucket_name
-}

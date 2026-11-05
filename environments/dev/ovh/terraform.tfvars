@@ -1,4 +1,4 @@
-project     = "myapp"
+project     = "rpetri"
 environment = "dev"
 
 subnets = {
@@ -24,12 +24,10 @@ security_groups = {
 }
 
 vms = {
-  web = { count = 2, flavor = "d2-2", subnets = ["web"], security_group = "web", user_data_file = "cloud-init/web.yaml" }
-  db  = { count = 1, flavor = "d2-2", subnets = ["db"], security_group = "db" }
+  web = { count = 2, flavor = "c3-4", subnets = ["web"], security_group = "web", user_data_file = "cloud-init/web.yaml" }
+  db  = { count = 1, flavor = "c3-4", subnets = ["db"], security_group = "db" }
 }
 
 lb_flavor       = "small"
 enable_admin_ip = true
 
-# ID du projet Public Cloud (visible dans l'espace client OVH) : à remplir demain
-ovh_project_id = "A_REMPLIR"

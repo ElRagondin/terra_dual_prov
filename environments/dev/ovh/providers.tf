@@ -5,13 +5,9 @@ terraform {
       source  = "terraform-provider-openstack/openstack"
       version = "~> 3.0"
     }
-    ovh = {
-      source  = "ovh/ovh"
-      version = "~> 2.0"
-    }
   }
 }
 
-# Identifiants lus depuis les variables OS_* et OVH_* : aucun secret dans le code
+# Identifiants lus depuis les variables OS_* (fichier ~/.secrets/openrc.sh) : aucun secret dans le code.
+# Projet OVH fourni par la formation : on passe directement par OpenStack, sans le provider ovh.
 provider "openstack" {}
-provider "ovh" {}

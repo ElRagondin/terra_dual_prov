@@ -8,3 +8,7 @@ crash.log
 *.auto.tfvars
 secrets.tfvars
 .secrets/
+
+# Plans Terraform
+*.tfplan
+tfplan
