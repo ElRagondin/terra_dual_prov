@@ -1,107 +1,55 @@
-locals {
-  name_prefix = "${var.project}-${var.environment}"
-}
+# Environnement dev : toute l'infrastructure est décrite dans le module stack,
+# seules les valeurs propres à l'environnement sont dans terraform.tfvars.
+module "stack" {
+  source = "../../../modules/ovh/stack"
 
-module "network" {
-  source      = "../../../modules/ovh/network"
-  name_prefix = local.name_prefix
-  subnets     = var.subnets
-}
-
-module "security" {
-  source          = "../../../modules/ovh/security"
-  name_prefix     = local.name_prefix
+  project         = var.project
+  environment     = var.environment
+  subnets         = var.subnets
   security_groups = var.security_groups
+  vms             = var.vms
+  image_name      = var.image_name
+  public_key      = var.public_key
+  lb_flavor       = var.lb_flavor
+  enable_admin_ip = var.enable_admin_ip
+  enable_https    = var.enable_https
+  volumes         = var.volumes
 }
 
-module "compute" {
-  source      = "../../../modules/ovh/compute"
-  name_prefix = local.name_prefix
-  network_id  = module.network.network_id
-  image_name  = var.image_name
-  public_key  = var.public_key
+output "app_url" { value = module.stack.app_url }
+output "app_url_https" { value = module.stack.app_url_https }
+output "admin_ssh" { value = module.stack.admin_ssh }
+output "vm_private_ips" { value = module.stack.vm_private_ips }
+output "subnet_ids" { value = module.stack.subnet_ids }
+output "security_group_ids" { value = module.stack.security_group_ids }
+output "volume_ids" { value = module.stack.volume_ids }
 
-  # Traduction des rôles ("web", "db") en IDs fournis par les autres modules
-  vm_groups = {
-    for name, vm in var.vms : name => {
-      count              = vm.count
-      flavor             = vm.flavor
-      subnet_ids         = [for s in vm.subnets : module.network.subnet_ids[s]]
-      security_group_ids = [module.security.security_group_ids[vm.security_group]]
-      user_data          = vm.user_data_file != null ? templatefile("${path.module}/${vm.user_data_file}", { web_cidr = var.subnets["web"].cidr }) : null
-    }
-  }
+# Les ressources ont changé d'adresse : on l'indique à Terraform pour qu'il ne les recrée pas
+moved {
+  from = module.network
+  to   = module.stack.module.network
 }
-
-output "subnet_ids" {
-  value = module.network.subnet_ids
+moved {
+  from = module.security
+  to   = module.stack.module.security
 }
-
-output "security_group_ids" {
-  value = module.security.security_group_ids
+moved {
+  from = module.compute
+  to   = module.stack.module.compute
 }
-
-output "vm_private_ips" {
-  value = module.compute.private_ips
+moved {
+  from = module.loadbalancer
+  to   = module.stack.module.loadbalancer
 }
-
-module "loadbalancer" {
-  enable_https      = var.enable_https
-  health_check_path = "/health"
-  depends_on        = [module.network]
-  source            = "../../../modules/ovh/loadbalancer"
-  name_prefix       = local.name_prefix
-  vip_subnet_id     = module.network.subnet_ids["web"]
-  member_subnet_id  = module.network.subnet_ids["web"]
-  flavor_name       = var.lb_flavor
-
-  # Seules les VMs web sont ajoutées au pool
-  members = { for name, ip in module.compute.private_ips : name => ip if startswith(name, "web-") }
+moved {
+  from = module.storage
+  to   = module.stack.module.storage
 }
-
-# IP d'administration SSH sur web-1, créée seulement si enable_admin_ip = true
-resource "openstack_networking_floatingip_v2" "admin" {
-  count       = var.enable_admin_ip ? 1 : 0
-  pool        = "Ext-Net"
-  description = "${local.name_prefix} - acces SSH admin"
+moved {
+  from = openstack_networking_floatingip_v2.admin
+  to   = module.stack.openstack_networking_floatingip_v2.admin
 }
-
-resource "openstack_networking_floatingip_associate_v2" "admin" {
-  depends_on  = [module.network]
-  count       = var.enable_admin_ip ? 1 : 0
-  floating_ip = openstack_networking_floatingip_v2.admin[0].address
-  port_id     = module.compute.port_ids["web-1-nic0"]
-}
-
-output "app_url" {
-  value = module.loadbalancer.url
-}
-
-output "admin_ssh" {
-  description = "Commande SSH vers web-1 (null si enable_admin_ip = false)"
-  value       = one(openstack_networking_floatingip_v2.admin[*].address) != null ? "ssh ubuntu@${one(openstack_networking_floatingip_v2.admin[*].address)}" : null
-}
-
-
-
-module "storage" {
-  source      = "../../../modules/ovh/storage"
-  name_prefix = local.name_prefix
-
-  # Traduction du nom logique de la VM (db-1) en ID fourni par le module compute
-  volumes = {
-    for name, v in var.volumes : name => {
-      size        = v.size
-      type        = v.type
-      instance_id = module.compute.instance_ids[v.instance]
-    }
-  }
-}
-
-output "volume_ids" {
-  value = module.storage.volume_ids
-}
-
-output "app_url_https" {
-  value = module.loadbalancer.https_url
+moved {
+  from = openstack_networking_floatingip_associate_v2.admin
+  to   = module.stack.openstack_networking_floatingip_associate_v2.admin
 }
