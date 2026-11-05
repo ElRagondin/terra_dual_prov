@@ -59,3 +59,46 @@ resource "openstack_networking_floatingip_associate_v2" "lb" {
   floating_ip = openstack_networking_floatingip_v2.lb.address
   port_id     = openstack_lb_loadbalancer_v2.this.vip_port_id
 }
+
+# --- HTTPS en passthrough : le Load Balancer ne déchiffre pas, il transmet ---
+
+resource "openstack_lb_listener_v2" "https" {
+  count = var.enable_https ? 1 : 0
+
+  name            = "${var.name_prefix}-listener-https"
+  loadbalancer_id = openstack_lb_loadbalancer_v2.this.id
+  protocol        = "HTTPS"
+  protocol_port   = 443
+}
+
+resource "openstack_lb_pool_v2" "https" {
+  count = var.enable_https ? 1 : 0
+
+  name        = "${var.name_prefix}-pool-https"
+  listener_id = openstack_lb_listener_v2.https[0].id
+  protocol    = "HTTPS"
+  lb_method   = "ROUND_ROBIN"
+}
+
+resource "openstack_lb_member_v2" "https" {
+  for_each = var.enable_https ? var.members : {}
+
+  name          = "${var.name_prefix}-member-https-${each.key}"
+  pool_id       = openstack_lb_pool_v2.https[0].id
+  address       = each.value
+  protocol_port = 443
+  subnet_id     = var.member_subnet_id
+}
+
+# Health check HTTPS : vérifie que nginx répond en TLS
+resource "openstack_lb_monitor_v2" "https" {
+  count = var.enable_https ? 1 : 0
+
+  name        = "${var.name_prefix}-monitor-https"
+  pool_id     = openstack_lb_pool_v2.https[0].id
+  type        = "HTTPS"
+  url_path    = var.health_check_path
+  delay       = 5
+  timeout     = 3
+  max_retries = 3
+}

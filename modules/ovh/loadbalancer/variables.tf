@@ -41,3 +41,9 @@ variable "external_network_name" {
   type        = string
   default     = "Ext-Net"
 }
+
+variable "enable_https" {
+  description = "Ajoute un listener HTTPS 443 en passthrough (TLS géré par les serveurs web)"
+  type        = bool
+  default     = false
+}

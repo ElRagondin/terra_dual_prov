@@ -10,8 +10,9 @@ security_groups = {
   web = {
     description = "Serveurs web : HTTP depuis le sous-reseau web (Load Balancer), SSH depuis l'admin"
     rules = {
-      ssh  = { protocol = "tcp", port_min = 22, port_max = 22, remote_ip_prefix = "82.225.88.198/32" }
-      http = { protocol = "tcp", port_min = 80, port_max = 80, remote_ip_prefix = "10.10.1.0/24" }
+      ssh   = { protocol = "tcp", port_min = 22, port_max = 22, remote_ip_prefix = "82.225.88.198/32" }
+      http  = { protocol = "tcp", port_min = 80, port_max = 80, remote_ip_prefix = "10.10.1.0/24" }
+      https = { protocol = "tcp", port_min = 443, port_max = 443, remote_ip_prefix = "10.10.1.0/24" }
     }
   }
   db = {
@@ -35,3 +36,5 @@ enable_admin_ip = true
 volumes = {
   pgdata = { size = 10, type = "classic", instance = "db-1" }
 }
+
+enable_https = true

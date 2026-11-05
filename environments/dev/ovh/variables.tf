@@ -76,3 +76,9 @@ variable "volumes" {
   }))
   default = {}
 }
+
+variable "enable_https" {
+  description = "Active le HTTPS sur le Load Balancer"
+  type        = bool
+  default     = false
+}
