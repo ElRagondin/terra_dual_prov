@@ -3,6 +3,10 @@ name: Deploy dev, staging and production
 on:
   workflow_dispatch:
     inputs:
+      verify_hcp:
+        description: Verify workspace access and state without deploying
+        type: boolean
+        default: false
       deploy:
         description: Apply the release after estimating staging costs
         type: boolean
@@ -60,8 +64,25 @@ jobs:
             --format json --out-file "$RUNNER_TEMP/azure-cost.json"
           python3 scripts/staging-cost.py "$RUNNER_TEMP/azure-cost.json"
 
+  preflight:
+    if: github.ref == 'refs/heads/main' && (inputs.deploy || inputs.verify_hcp)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify HCP workspaces without creating runs
+        env:
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          INCLUDE_PROD: ${{ inputs.verify_hcp || inputs.deploy_prod }}
+        run: |
+          flags=()
+          if [[ "$INCLUDE_PROD" == true ]]; then flags+=(--include-prod); fi
+          python3 scripts/hcp-release.py preflight "${flags[@]}"
+
   dev:
-    needs: estimate
+    needs: [estimate, preflight]
     if: inputs.deploy
     runs-on: ubuntu-latest
     timeout-minutes: 110

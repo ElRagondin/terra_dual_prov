@@ -46,6 +46,17 @@ class PricingTest(unittest.TestCase):
 
 
 class PromotionTest(unittest.TestCase):
+    def test_preflight_detects_both_staging_providers_without_creating_runs(self):
+        counts = {"dev-azure": 24, "dev-ovh": 0, "staging-azure": 24, "staging-ovh": 12, "prod-ovh": 12}
+        with patch.multiple(release, workspace=lambda name: name,
+                            managed_count=counts.__getitem__, compatible_version=Mock(),
+                            execute=Mock()):
+            with self.assertRaisesRegex(ValueError, "staging: both providers"):
+                release.preflight(include_prod=True)
+            self.assertEqual(release.compatible_version.call_count, 5)
+            release.execute.assert_not_called()
+
+
     def test_switch_waits_for_destroy_and_empty_state(self):
         operations = []
         state = {"staging-ovh": 15, "staging-azure": 0}

@@ -209,14 +209,41 @@ def deploy(env, provider, allow_switch):
     check_other()
 
 
+def preflight(include_prod):
+    names = ("dev-azure", "dev-ovh", "staging-azure", "staging-ovh")
+    if include_prod:
+        names += ("prod-ovh",)
+    counts = {}
+    failures = []
+    for name in names:
+        try:
+            ws = workspace(name)
+            counts[name] = managed_count(name)
+            compatible_version(ws)
+            print(f"{name}: VCS revision verified, {counts[name]} managed resources", flush=True)
+        except (KeyError, ValueError, RuntimeError, TimeoutError) as error:
+            failures.append(f"{name}: {error}")
+    for environment in ("dev", "staging"):
+        if all(counts.get(f"{environment}-{cloud}", 0) for cloud in ("azure", "ovh")):
+            failures.append(f"{environment}: both providers have resources")
+    if failures:
+        raise ValueError("HCP preflight failed:\n" + "\n".join(failures))
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("environment", choices=("dev", "staging", "prod"))
-    parser.add_argument("provider", choices=("azure", "ovh", "tie"))
+    parser.add_argument("environment", choices=("dev", "staging", "prod", "preflight"))
+    parser.add_argument("provider", nargs="?", choices=("azure", "ovh", "tie"))
     parser.add_argument("--allow-switch", action="store_true")
+    parser.add_argument("--include-prod", action="store_true")
     args = parser.parse_args()
     if os.environ["GITHUB_REF"] != "refs/heads/main":
         parser.error("Deployments must run from main")
+    if args.environment == "preflight":
+        preflight(args.include_prod)
+        return
+    if args.provider is None:
+        parser.error("Choose a provider for deployment")
     if args.environment == "prod" and args.provider != "ovh":
         parser.error("Production is fixed to OVH")
     deploy(args.environment, args.provider, args.allow_switch)

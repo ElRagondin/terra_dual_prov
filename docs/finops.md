@@ -7,7 +7,7 @@ Le workflow **Deploy dev, staging and production** se lance depuis **Actions →
 3. **Staging** : déploiement sur le cloud le moins cher. À égalité exacte, le workflow conserve le staging déjà actif, ou choisit Azure si les deux workspaces sont vides.
 4. **Prod** : promotion facultative vers **`prod-ovh`**. La décision FinOps ne s'applique pas à la prod.
 
-Le mode par défaut (`deploy=false`) affiche seulement les coûts. Activez `deploy` pour dev et staging, puis `deploy_prod` pour poursuivre vers la production dans le même run. Protégez l'environnement GitHub **production** avec les approbations et les branches autorisées disponibles sur votre offre GitHub.
+Le mode par défaut (`deploy=false`) affiche les coûts. Cochez `verify_hcp` pour vérifier aussi les cinq workspaces, leurs états et la révision VCS sans créer de run Terraform. Chaque déploiement exécute automatiquement ce contrôle avant de modifier une ressource. Activez `deploy` pour dev et staging, puis `deploy_prod` pour poursuivre vers la production dans le même run. Protégez l'environnement GitHub **production** avec les approbations et les branches autorisées disponibles sur votre offre GitHub.
 
 ## Configuration initiale
 
