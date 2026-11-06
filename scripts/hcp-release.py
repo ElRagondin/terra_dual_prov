@@ -1,5 +1,6 @@
 """Promote a checked-out main revision through existing HCP Terraform workspaces."""
 import argparse
+import ipaddress
 import json
 import os
 import re
@@ -56,13 +57,13 @@ def workspace(name):
     return item
 
 
-def managed_count(name):
-    ws = workspace(name)
+def read_state(ws):
+    name = ws["attributes"]["name"]
     state = ws["relationships"]["current-state-version"]["data"]
     if state is None:
         if ws["attributes"]["resource-count"] != 0:
             raise ValueError(f"{name}: inconsistent state metadata")
-        return 0
+        return {"resources": [], "outputs": {}}
     details = api(f"/state-versions/{state['id']}")["data"]["attributes"]
     url = details["hosted-state-download-url"]
     endpoint = urlsplit(url)
@@ -74,11 +75,16 @@ def managed_count(name):
         request.add_unredirected_header("Authorization", "Bearer " + os.environ["HCP_TERRAFORM_TOKEN"].strip())
     try:
         with urlopen(request, timeout=30) as response:
-            resources = json.load(response)["resources"]
+            return json.load(response)
     except HTTPError as error:
         raise RuntimeError(f"{name}: HCP state download returned HTTP {error.code}") from None
     except Exception as error:
         raise RuntimeError(f"{name}: could not read current HCP state ({type(error).__name__})") from None
+
+
+
+def managed_count(name):
+    resources = read_state(workspace(name))["resources"]
     return sum(len(resource["instances"]) for resource in resources if resource["mode"] == "managed")
 
 
@@ -131,7 +137,7 @@ def drain_vcs_plans(ws):
     raise TimeoutError(f"VCS runs are still queued for {ws['attributes']['name']}")
 
 
-def execute(ws, version, *, operation, before_apply=None):
+def execute(ws, version, *, operation, before_apply=None, variables=None):
     name = ws["attributes"]["name"]
     if operation != "preview":
         drain_vcs_plans(ws)
@@ -142,6 +148,7 @@ def execute(ws, version, *, operation, before_apply=None):
             "plan-only": operation == "preview",
             "is-destroy": operation == "destroy",
             "auto-apply": False,
+            "variables": variables or [],
         },
         "relationships": {
             "workspace": {"data": {"type": "workspaces", "id": ws["id"]}},
@@ -175,6 +182,43 @@ def execute(ws, version, *, operation, before_apply=None):
     raise TimeoutError(f"{name}: run {run_id} did not finish; check HCP before retrying")
 
 
+def staging_variables(provider):
+    if provider != "azure":
+        return None
+    with urlopen("https://api.ipify.org", timeout=10) as response:
+        address = ipaddress.IPv4Address(response.read(64).decode().strip())
+    if not address.is_global:
+        raise ValueError("The GitHub runner needs a public IPv4 address for staging")
+    return [{"key": "web_source_cidr", "value": json.dumps(f"{address}/32")}]
+
+
+def check_staging_web(target, provider):
+    output = "web_url" if provider == "azure" else "app_url"
+    address = urlsplit(read_state(target)["outputs"][output]["value"])
+    host = ipaddress.IPv4Address(address.hostname)
+    if not host.is_global:
+        raise ValueError("The staging load balancer needs a public IPv4 address")
+    checks = (
+        (f"http://{host}/health", "ok"),
+        (f"https://{host}/", "<h1>"),
+    )
+    for url, expected in checks:
+        for attempt in range(15):
+            # Both cloud-init templates issue their own staging certificate.
+            result = subprocess.run(
+                ["curl", "--fail", "--silent", "--insecure", "--max-time", "10", url],
+                capture_output=True, text=True, check=False,
+            )
+            body = result.stdout.strip()
+            if result.returncode == 0 and (body == expected if expected == "ok" else expected in body):
+                print(f"Staging smoke test passed: {url}", flush=True)
+                break
+            if attempt < 14:
+                time.sleep(10)
+        else:
+            raise RuntimeError(f"Staging smoke test failed: {url}")
+
+
 def deploy(env, provider, allow_switch, *, plan_only=False):
     if env == "prod":
         target = workspace("prod-ovh")
@@ -195,14 +239,17 @@ def deploy(env, provider, allow_switch, *, plan_only=False):
     if plan_only:
         execute(target, version, operation="preview")
         return
+    if states[other] and not allow_switch:
+        raise ValueError(f"{names[other]} is active; switching requires allow_switch")
+    if env == "staging" and not target["attributes"]["allow-destroy-plan"]:
+        raise ValueError(f"{names[provider]}: enable Allow destroy plans before deploying temporary staging")
+    variables = staging_variables(provider) if env == "staging" else None
     if states[other]:
-        if not allow_switch:
-            raise ValueError(f"{names[other]} is active; switching requires allow_switch")
         old = workspace(names[other])
         if not old["attributes"]["allow-destroy-plan"]:
             raise ValueError(f"{names[other]}: enable Allow destroy plans before switching")
         old_version = compatible_version(old)
-        execute(target, version, operation="preview")
+        execute(target, version, operation="preview", variables=variables)
         execute(old, old_version, operation="destroy")
 
     def check_other():
@@ -220,10 +267,30 @@ def deploy(env, provider, allow_switch, *, plan_only=False):
                 raise ValueError(f"{names[other]}: verify orphaned resources after {run['id']}")
 
     check_other()
-    execute(target, version, operation="deploy", before_apply=check_other)
-    if not managed_count(names[provider]):
-        raise ValueError(f"{names[provider]} is still empty after deployment")
-    check_other()
+    cleanup = False
+
+    def before_apply():
+        nonlocal cleanup
+        check_other()
+        cleanup = env == "staging"
+
+    try:
+        if variables:
+            execute(target, version, operation="deploy", before_apply=before_apply, variables=variables)
+        else:
+            execute(target, version, operation="deploy", before_apply=before_apply)
+        cleanup = env == "staging"
+        if not managed_count(names[provider]):
+            raise ValueError(f"{names[provider]} is still empty after deployment")
+        check_other()
+        if env == "staging":
+            check_staging_web(target, provider)
+    finally:
+        if cleanup and managed_count(names[provider]):
+            execute(target, version, operation="destroy")
+            if any(managed_count(name) for name in names.values()):
+                raise ValueError("Staging is still present after cleanup")
+            print("Both staging workspaces are empty", flush=True)
 
 
 def preflight(include_prod):

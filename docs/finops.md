@@ -4,7 +4,7 @@ Le workflow **Deploy dev, staging and production** se lance depuis **Actions →
 
 1. **Estimation** : Infracost lit le Terraform du staging Azure si une clé est disponible. Sinon, le workflow calcule le tarif Azure avec l’API publique Azure Retail Prices. Les deux modes appliquent une seule fois le tarif des cinq premières règles du load balancer Standard. Le script lit en direct le catalogue public OVH France pour GRA11 et compare les deux totaux en EUR. Une PR du même dépôt qui touche le staging ou ses modules affiche l’estimation sans déployer.
 2. **Dev** : déploiement sur le cloud choisi dans `dev_provider`.
-3. **Staging** : déploiement sur le cloud le moins cher. À égalité exacte, le workflow conserve le staging déjà actif, ou choisit Azure si les deux workspaces sont vides.
+3. **Staging temporaire** : déploiement sur le cloud le moins cher, contrôle de `/health` et de la page HTTPS, puis destruction et vérification des deux états HCP. Le nettoyage est tenté même si un test échoue. La production exige la réussite des tests et du nettoyage. À égalité exacte, le workflow conserve le staging déjà actif, ou choisit Azure si les deux workspaces sont vides.
 4. **Prod** : promotion facultative vers **`prod-ovh`**. La décision FinOps ne s'applique pas à la prod.
 
 Le mode par défaut (`deploy=false`) affiche les coûts. Cochez `verify_hcp` pour vérifier aussi les cinq workspaces, leurs états et la révision VCS sans créer de run Terraform. Chaque déploiement exécute automatiquement ce contrôle avant de modifier une ressource. Pour répéter la promotion sans appliquer, cochez `plan_release` et `deploy_prod`, avec `deploy` décoché. Le workflow exécute alors les trois plans spéculatifs dans l’ordre. Activez ensuite `deploy` seul pour dev et staging, puis `deploy_prod` pour poursuivre vers la production dans le même run. Protégez l'environnement GitHub **production** avec les approbations et les branches autorisées disponibles sur votre offre GitHub.
@@ -14,7 +14,7 @@ Le mode par défaut (`deploy=false`) affiche les coûts. Cochez `verify_hcp` pou
 - Secret GitHub facultatif **`INFRACOST_API_KEY`** : clé d'API Infracost. Sans clé, le workflow utilise les tarifs publics Azure.
 - Secret GitHub **`HCP_TERRAFORM_TOKEN`** : jeton d'équipe HCP avec accès aux cinq workspaces, lecture de l'état et droits de plan, apply et discard. Si l'offre HCP ne permet pas une équipe dédiée, utilisez un jeton utilisateur à durée limitée, avec les droits nécessaires. Utilisez un secret d'environnement distinct pour la prod si les droits sont séparés.
 - Dans HCP, conservez les connexions VCS sur **main** et le dossier Terraform de chaque workspace : `environments/dev/azure`, `environments/dev/ovh`, `environments/staging/azure`, `environments/staging/ovh`, `environments/prod/ovh`. Vérifiez les identifiants cloud existants et la clé SSH de chacun.
-- Désactivez les deux options **Auto-apply** et l'auto-destroy dans ces workspaces. Activez **Allow destroy plans** sur les quatre workspaces dev et staging si les bascules sont autorisées.
+- Désactivez les deux options **Auto-apply** et l'auto-destroy dans ces workspaces. Activez **Allow destroy plans** sur les deux workspaces staging pour le nettoyage, et sur les workspaces dev si les bascules sont autorisées. Pour Azure, le runner obtient son IPv4 publique via ipify et HCP autorise cette seule adresse pendant le staging. Les certificats autosignés servent à vérifier la réponse HTTPS en staging.
 
 ## Hypothèses et bascule
 

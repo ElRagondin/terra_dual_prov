@@ -18,14 +18,25 @@ variable "public_key" {
   description = "Clé publique SSH de l'administrateur des VM."
 }
 
+variable "web_source_cidr" {
+  type    = string
+  default = "82.96.158.190/32"
+
+  validation {
+    condition     = can(cidrnetmask(var.web_source_cidr)) && endswith(var.web_source_cidr, "/32")
+    error_message = "Use a single IPv4 address with a /32 prefix."
+  }
+}
+
 module "stack" {
   source = "../../../modules/azure/stack"
 
   name_prefix = "myapp-staging"
   # Taille Standard_B2ats_v2 validée dans cette région.
-  location   = "spaincentral"
-  vnet_cidr  = "10.11.0.0/16"
-  public_key = var.public_key
+  location        = "spaincentral"
+  vnet_cidr       = "10.11.0.0/16"
+  public_key      = var.public_key
+  web_source_cidr = var.web_source_cidr
 
   subnets = {
     web = { cidr = "10.11.1.0/24" }

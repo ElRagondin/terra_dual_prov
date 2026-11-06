@@ -31,6 +31,11 @@ variable "public_key" {
   type = string
 }
 
+variable "web_source_cidr" {
+  type    = string
+  default = "82.96.158.190/32"
+}
+
 resource "azurerm_resource_group" "this" {
   name     = "${var.name_prefix}-rg"
   location = var.location
@@ -80,7 +85,7 @@ module "security" {
         priority    = 100
         access      = "Allow"
         protocol    = "Tcp"
-        source      = "82.96.158.190/32"
+        source      = var.web_source_cidr
         destination = "80"
       }
 
@@ -88,7 +93,7 @@ module "security" {
         priority    = 110
         access      = "Allow"
         protocol    = "Tcp"
-        source      = "82.96.158.190/32"
+        source      = var.web_source_cidr
         destination = "443"
       }
     }

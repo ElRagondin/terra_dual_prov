@@ -74,11 +74,11 @@ class PromotionTest(unittest.TestCase):
             release.execute.assert_not_called()
 
 
-    def test_switch_waits_for_destroy_and_empty_state(self):
+    def test_staging_switch_cleans_up_after_failed_smoke_test(self):
         operations = []
         state = {"staging-ovh": 15, "staging-azure": 0}
 
-        def execute(workspace, version, *, operation, before_apply=None):
+        def execute(workspace, version, *, operation, before_apply=None, variables=None):
             operations.append((workspace, operation))
             if before_apply:
                 before_apply()
@@ -93,10 +93,15 @@ class PromotionTest(unittest.TestCase):
         with patch.multiple(release, managed_count=state.__getitem__,
                             workspace=lambda name: {"id": name, "attributes": {"allow-destroy-plan": True}},
                             compatible_version=lambda workspace: "cv", execute=invoke,
-                            drain_vcs_plans=Mock(), api=Mock(return_value={"data": []})):
-            release.deploy("staging", "azure", True)
-        self.assertEqual(operations, [("staging-azure", "preview"),
-                                      ("staging-ovh", "destroy"), ("staging-azure", "deploy")])
+                            drain_vcs_plans=Mock(), api=Mock(return_value={"data": []}),
+                            staging_variables=Mock(return_value=[{"key": "web_source_cidr", "value": '"8.8.8.8/32"'}]),
+                            check_staging_web=Mock(side_effect=RuntimeError("staging test failed"))):
+            with self.assertRaisesRegex(RuntimeError, "staging test failed"):
+                release.deploy("staging", "azure", True)
+            release.check_staging_web.assert_called_once()
+        self.assertEqual(operations, [("staging-azure", "preview"), ("staging-ovh", "destroy"),
+                                      ("staging-azure", "deploy"), ("staging-azure", "destroy")])
+        self.assertFalse(any(state.values()))
 
     def test_switch_requires_explicit_permission(self):
         with patch.multiple(release, managed_count=lambda name: int(name.endswith("ovh")),

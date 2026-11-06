@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/terraform-deploy.yml'
       - 'scripts/staging-cost.py'
+      - 'scripts/hcp-release.py'
       - 'environments/staging/**'
       - 'modules/azure/**'
       - 'modules/ovh/**'
@@ -141,7 +142,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Run the lowest-cost staging
+      - name: Deploy, test and clean up the lowest-cost staging
         env:
           HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
           PROVIDER: ${{ needs.estimate.outputs.staging_provider }}
