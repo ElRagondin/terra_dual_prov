@@ -8,7 +8,7 @@ subnets = {
 
 security_groups = {
   web = {
-    description = "Serveurs web : HTTP depuis le sous-reseau web (Load Balancer) - demo"
+    description = "Serveurs web : HTTP depuis le sous-reseau web (Load Balancer)"
     rules = {
       http  = { protocol = "tcp", port_min = 80, port_max = 80, remote_ip_prefix = "10.12.1.0/24" }
       https = { protocol = "tcp", port_min = 443, port_max = 443, remote_ip_prefix = "10.12.1.0/24" }
