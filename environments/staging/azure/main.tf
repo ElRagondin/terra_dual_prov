@@ -31,7 +31,7 @@ variable "web_source_cidr" {
 module "stack" {
   source = "../../../modules/azure/stack"
 
-  name_prefix     = "myapp-staging"
+  name_prefix = "myapp-staging"
   # Taille Standard_B2ats_v2 validée dans cette région.
   location        = "spaincentral"
   vnet_cidr       = "10.11.0.0/16"
