@@ -69,6 +69,32 @@ jobs:
         run: |
           echo 'Tarif Azure non vérifié : secret INFRACOST_API_KEY absent.' >> "$GITHUB_STEP_SUMMARY"
           if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then exit 1; fi
+      - name: Cross-check Spain Central retail meters
+        if: github.event_name == 'pull_request' && env.INFRACOST_API_KEY == ''
+        run: |
+          python3 - <<'PY'
+          import json
+          from urllib.parse import urlencode
+          from urllib.request import urlopen
+          filters = [
+              "armSkuName eq 'Standard_B2ats_v2' and priceType eq 'Consumption'",
+              "serviceName eq 'Storage' and (skuName eq 'P6 LRS' or skuName eq 'E3 LRS')",
+              "serviceName eq 'Load Balancer'",
+              "serviceName eq 'Virtual Network' and contains(meterName, 'IP')",
+          ]
+          for clause in filters:
+              url = "https://prices.azure.com/api/retail/prices?" + urlencode({
+                  "currencyCode": "'EUR'",
+                  "$filter": "armRegionName eq 'spaincentral' and (" + clause + ")",
+              })
+              with urlopen(url, timeout=30) as response:
+                  data = json.load(response)
+              for row in data["Items"]:
+                  print("METER", *(row.get(k) for k in (
+                      "productName", "skuName", "meterName", "unitOfMeasure", "retailPrice",
+                      "tierMinimumUnits", "type", "currencyCode",
+                  )), sep=" | ")
+          PY
       - uses: infracost/actions/setup@v3
         if: env.INFRACOST_API_KEY != ''
         with:
