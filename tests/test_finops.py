@@ -1,4 +1,5 @@
 """Check FinOps fail-closed behavior without credentials or cloud calls."""
+from decimal import Decimal
 import importlib.util
 import json
 from pathlib import Path
@@ -19,6 +20,22 @@ release = load("hcp-release")
 
 
 class PricingTest(unittest.TestCase):
+    def test_azure_retail_applies_the_load_balancer_bundle_once(self):
+        def row(product, meter, unit, amount, **attrs):
+            return dict(productName=product, meterName=meter, unitOfMeasure=unit,
+                        retailPrice=Decimal(amount), type="Consumption", currencyCode="EUR",
+                        tierMinimumUnits=0, **attrs)
+
+        with patch.object(cost, "retail_prices", side_effect=[
+            [row("Load Balancer", cost.LB_METER, "1 Hour", "0.0224", armRegionName="Global", skuName="Standard")],
+            [row("Virtual Machines Basv2 Series", "B2ats v2", "1 Hour", "0.011")],
+            [row("Premium SSD Managed Disks", "P6 LRS Disk", "1/Month", "10.0787"),
+             row("Standard SSD Managed Disks", "E3 LRS Disk", "1/Month", "1.0772")],
+            [row("IP Addresses", "Standard IPv4 Static Public IP", "1 Hour", "0.0045", skuName="Standard")],
+        ]):
+            self.assertEqual(cost.azure_retail_monthly(cost.azure_lb_monthly()), Decimal("75.0403"))
+
+
     def test_hourly_catalog_rates_and_missing_cost(self):
         selectors = {name: name for name in cost.QUANTITIES}
         catalog = {"plans": [{"planCode": name, "pricings": [
