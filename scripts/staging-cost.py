@@ -16,7 +16,7 @@ CATALOG = "https://eu.api.ovh.com/1.0/order/catalog/public/cloud?ovhSubsidiary=F
 HOURS = Decimal(730)
 AZURE_RETAIL = "https://prices.azure.com/api/retail/prices"
 MODEL_FINGERPRINTS = {
-    "azure": "483ea1f7634f713fe2444b7f672b7d5c80c2ba149e3af12c09e190cd941b2963",
+    "azure": "b49617c99058d0768f30fc386b6b80043714804ab2d4e4179cb4770a51aeb8e3",
     "ovh": "5c1d73dac7729b688d15b8a089368bf6e21878015405df3a656fa0fba146de01",
 }
 LB_METER = "Standard Included LB Rules and Outbound Rules"
