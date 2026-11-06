@@ -1,11 +1,11 @@
 # Déploiement et FinOps
 
-Le workflow **Deploy dev, staging and production** se lance depuis **Actions → Run workflow**, sur **main**. Il attend un contrôle **Terraform CI** réussi pour le même commit avant de déployer.
+Après une fusion sur **main**, le workflow **Deploy dev, staging and production** démarre automatiquement quand **Terraform CI** réussit sur le même commit. La livraison automatique utilise le dev OVH, déploie et teste le staging temporaire au meilleur tarif, le nettoie, puis promeut la prod OVH. Elle s'applique aux pushes sur main et garde les bascules entre clouds désactivées. Le lancement manuel reste disponible dans **Actions → Run workflow**.
 
 1. **Estimation** : Infracost lit le Terraform du staging Azure si une clé est disponible. Sinon, le workflow calcule le tarif Azure avec l’API publique Azure Retail Prices. Les deux modes appliquent une seule fois le tarif des cinq premières règles du load balancer Standard. Le script lit en direct le catalogue public OVH France pour GRA11 et compare les deux totaux en EUR. Une PR du même dépôt qui touche le staging ou ses modules affiche l’estimation sans déployer.
 2. **Dev** : déploiement sur le cloud choisi dans `dev_provider`.
 3. **Staging temporaire** : déploiement sur le cloud le moins cher, contrôle de `/health` et de la page HTTPS, puis destruction et vérification des deux états HCP. Le nettoyage est tenté même si un test échoue. La production exige la réussite des tests et du nettoyage. À égalité exacte, le workflow conserve le staging déjà actif, ou choisit Azure si les deux workspaces sont vides.
-4. **Prod** : promotion facultative vers **`prod-ovh`**. La décision FinOps ne s'applique pas à la prod.
+4. **Prod** : promotion vers **`prod-ovh`** après réussite du staging. En mode manuel, elle est facultative. La décision FinOps ne s'applique pas à la prod.
 
 Le mode par défaut (`deploy=false`) affiche les coûts. Cochez `verify_hcp` pour vérifier aussi les cinq workspaces, leurs états et la révision VCS sans créer de run Terraform. Chaque déploiement exécute automatiquement ce contrôle avant de modifier une ressource. Pour répéter la promotion sans appliquer, cochez `plan_release` et `deploy_prod`, avec `deploy` décoché. Le workflow exécute alors les trois plans spéculatifs dans l’ordre. Activez ensuite `deploy` seul pour dev et staging, puis `deploy_prod` pour poursuivre vers la production dans le même run. Protégez l'environnement GitHub **production** avec les approbations et les branches autorisées disponibles sur votre offre GitHub.
 
