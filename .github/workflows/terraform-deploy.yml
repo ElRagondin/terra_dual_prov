@@ -73,7 +73,7 @@ jobs:
         if: github.event_name == 'pull_request' && env.INFRACOST_API_KEY == ''
         run: |
           python3 - <<'PY'
-          import json
+          import json, re
           from urllib.parse import urlencode
           from urllib.request import urlopen
           filters = [
@@ -94,6 +94,22 @@ jobs:
                       "productName", "skuName", "meterName", "unitOfMeasure", "retailPrice",
                       "tierMinimumUnits", "type", "currencyCode",
                   )), sep=" | ")
+          for clause in ("contains(meterName, 'First 5')", "serviceName eq 'Load Balancer'"):
+              url = "https://prices.azure.com/api/retail/prices?" + urlencode({
+                  "currencyCode": "'EUR'", "$filter": clause,
+              })
+              with urlopen(url, timeout=30) as response:
+                  data = json.load(response)
+              rows = data["Items"]
+              print("LB_COUNT", clause, len(rows), bool(data["NextPageLink"]))
+              for row in rows:
+                  if re.search(r'first|spain|zone 1', " ".join(str(row.get(k, "")) for k in (
+                      "meterName", "armRegionName", "location",
+                  )), re.I):
+                      print("LB_RATE", *(row.get(k) for k in (
+                          "armRegionName", "location", "productName", "meterName", "unitOfMeasure",
+                          "retailPrice", "type", "tierMinimumUnits", "skuName",
+                      )), sep=" | ")
           PY
       - uses: infracost/actions/setup@v3
         if: env.INFRACOST_API_KEY != ''
