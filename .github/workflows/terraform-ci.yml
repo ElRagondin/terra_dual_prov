@@ -1,0 +1,62 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.1
+      - run: terraform fmt -check -recursive -diff
+
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.1
+      # Chaque dossier d'environnement (OVH et Azure) est détecté et validé, sans backend
+      - run: |
+          status=0
+          for dir in $(find environments -name main.tf -exec dirname {} \; | sort); do
+            echo "::group::$dir"
+            (cd "$dir" && terraform init -backend=false -input=false >/dev/null && terraform validate) || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
+  tflint:
+    name: TFLint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: terraform-linters/setup-tflint@v4
+      - run: tflint --init --config "$GITHUB_WORKSPACE/.tflint.hcl"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: tflint --recursive --config "$GITHUB_WORKSPACE/.tflint.hcl" --format compact
+
+  trivy:
+    name: Trivy (sécurité)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
