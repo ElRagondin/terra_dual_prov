@@ -1,0 +1,176 @@
+name: Deploy dev, staging and production
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/terraform-deploy.yml'
+      - 'scripts/staging-cost.py'
+      - 'environments/staging/**'
+      - 'modules/azure/**'
+      - 'modules/ovh/**'
+  workflow_dispatch:
+    inputs:
+      verify_hcp:
+        description: Verify workspace access and state without deploying
+        type: boolean
+        default: false
+      plan_release:
+        description: Rehearse dev, staging and optional production with speculative plans
+        type: boolean
+        default: false
+      deploy:
+        description: Apply the release after estimating staging costs
+        type: boolean
+        default: false
+      dev_provider:
+        description: Development provider
+        type: choice
+        options: [azure, ovh]
+        default: ovh
+      allow_switch:
+        description: Allow destruction of the old dev or staging when switching providers
+        type: boolean
+        default: false
+      deploy_prod:
+        description: Include OVH production after staging succeeds
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('finops-pr-{0}', github.event.pull_request.number) || 'terraform-release' }}
+  cancel-in-progress: false
+
+jobs:
+  estimate:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    env:
+      INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      staging_provider: ${{ steps.cost.outputs.provider }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select one release mode
+        if: inputs.plan_release && inputs.deploy
+        run: |
+          echo "Choose plan_release or deploy, not both." >&2
+          exit 1
+      - name: Verify Terraform CI for this revision
+        if: inputs.deploy || inputs.plan_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/terraform-ci.yml/runs" \
+            -f head_sha="$GITHUB_SHA" -f event=push -f branch=main \
+            --jq '[.workflow_runs[] | select(.conclusion == "success")] | length' \
+            | grep -Ex '[1-9][0-9]*'
+      - uses: infracost/actions/setup@v3
+        if: env.INFRACOST_API_KEY != ''
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+          currency: EUR
+      - name: Compare staging prices
+        id: cost
+        run: |
+          if [[ -n "$INFRACOST_API_KEY" ]]; then
+            infracost breakdown \
+              --path environments/staging/azure \
+              --format json --out-file "$RUNNER_TEMP/azure-cost.json"
+            python3 scripts/staging-cost.py "$RUNNER_TEMP/azure-cost.json"
+          else
+            python3 scripts/staging-cost.py
+          fi
+
+  preflight:
+    if: github.ref == 'refs/heads/main' && (inputs.deploy || inputs.plan_release || inputs.verify_hcp)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify HCP workspaces without creating runs
+        env:
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          INCLUDE_PROD: ${{ inputs.verify_hcp || inputs.deploy_prod }}
+        run: |
+          flags=()
+          if [[ "$INCLUDE_PROD" == true ]]; then flags+=(--include-prod); fi
+          python3 scripts/hcp-release.py preflight "${flags[@]}"
+
+  dev:
+    needs: [estimate, preflight]
+    if: github.event_name == 'workflow_dispatch' && (inputs.deploy || inputs.plan_release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run dev
+        env:
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          PROVIDER: ${{ inputs.dev_provider }}
+          ALLOW_SWITCH: ${{ inputs.allow_switch }}
+          PLAN_ONLY: ${{ inputs.plan_release }}
+        run: |
+          flags=()
+          if [[ "$PLAN_ONLY" == true ]]; then
+            flags+=(--plan-only)
+          elif [[ "$ALLOW_SWITCH" == true ]]; then
+            flags+=(--allow-switch)
+          fi
+          python3 scripts/hcp-release.py dev "$PROVIDER" "${flags[@]}"
+
+  staging:
+    needs: [estimate, dev]
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run the lowest-cost staging
+        env:
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          PROVIDER: ${{ needs.estimate.outputs.staging_provider }}
+          ALLOW_SWITCH: ${{ inputs.allow_switch }}
+          PLAN_ONLY: ${{ inputs.plan_release }}
+        run: |
+          flags=()
+          if [[ "$PLAN_ONLY" == true ]]; then
+            flags+=(--plan-only)
+          elif [[ "$ALLOW_SWITCH" == true ]]; then
+            flags+=(--allow-switch)
+          fi
+          python3 scripts/hcp-release.py staging "$PROVIDER" "${flags[@]}"
+
+  prod:
+    needs: staging
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run OVH production
+        env:
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          PLAN_ONLY: ${{ inputs.plan_release }}
+        run: |
+          flags=()
+          if [[ "$PLAN_ONLY" == true ]]; then flags+=(--plan-only); fi
+          python3 scripts/hcp-release.py prod ovh "${flags[@]}"
