@@ -177,34 +177,23 @@ jobs:
 
   hcp-readiness:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feature/finops-hcp-pipeline'
+    needs: estimate
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Verify HCP token and workspace metadata without mutating HCP
+      - name: Rehearse the release with HCP plan-only runs
         env:
           HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          PROVIDER: ${{ needs.estimate.outputs.staging_provider }}
         run: |
-          python3 - <<'PY'
+          python -u - <<'PY'
+          import os
           import runpy
-          from urllib.parse import urlsplit
           hcp = runpy.run_path("scripts/hcp-release.py")
-          api = hcp["api"]
-          for name in ("dev-azure", "dev-ovh", "staging-azure", "staging-ovh", "prod-ovh"):
-              ws = api(f"/organizations/terra_dual_prov/workspaces/{name}")["data"]
-              attrs = ws["attributes"]
-              perms = attrs["permissions"]
-              state = ws["relationships"]["current-state-version"]["data"]
-              print(name, "auto-apply:", attrs["auto-apply"], "run/apply:",
-                    perms.get("can-queue-run"), perms.get("can-queue-apply"),
-                    "resource-count:", attrs["resource-count"], flush=True)
-              assert perms["can-queue-run"] and perms["can-queue-apply"]
-              if state:
-                  detail = api(f"/state-versions/{state['id']}")["data"]["attributes"]
-                  print("State host:", urlsplit(detail["hosted-state-download-url"]).hostname, flush=True)
-              try:
-                  print("Configuration:", hcp["compatible_version"](ws), flush=True)
-              except (ValueError, RuntimeError) as error:
-                  print("Configuration check:", error, flush=True)
+          hcp["preflight"](True)
+          for environment, provider in (("dev", "ovh"), ("staging", os.environ["PROVIDER"]), ("prod", "ovh")):
+              hcp["deploy"](environment, provider, False, plan_only=True)
           PY

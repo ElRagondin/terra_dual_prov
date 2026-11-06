@@ -65,7 +65,8 @@ def managed_count(name):
         return 0
     details = api(f"/state-versions/{state['id']}")["data"]["attributes"]
     url = details["hosted-state-download-url"]
-    if urlsplit(url).scheme != "https" or urlsplit(url).hostname != "archivist.terraform.io":
+    endpoint = urlsplit(url)
+    if endpoint.scheme != "https" or endpoint.hostname not in {"app.terraform.io", "archivist.terraform.io"}:
         raise ValueError("Unexpected HCP state download host")
     # State can contain secrets. Read in memory only, never log or upload it.
     try:
