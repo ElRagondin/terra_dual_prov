@@ -10,6 +10,10 @@ on:
       - 'environments/staging/**'
       - 'modules/azure/**'
       - 'modules/ovh/**'
+  workflow_run:
+    workflows: [Terraform CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       verify_hcp:
@@ -48,6 +52,11 @@ concurrency:
 jobs:
   estimate:
     if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.head_sha == github.sha) ||
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
@@ -66,7 +75,7 @@ jobs:
           echo "Choose plan_release or deploy, not both." >&2
           exit 1
       - name: Verify Terraform CI for this revision
-        if: inputs.deploy || inputs.plan_release
+        if: github.event_name == 'workflow_run' || inputs.deploy || inputs.plan_release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -92,7 +101,14 @@ jobs:
           fi
 
   preflight:
-    if: github.ref == 'refs/heads/main' && (inputs.deploy || inputs.plan_release || inputs.verify_hcp)
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.head_sha == github.sha) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+       (inputs.deploy || inputs.plan_release || inputs.verify_hcp))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -110,7 +126,7 @@ jobs:
 
   dev:
     needs: [estimate, preflight]
-    if: github.event_name == 'workflow_dispatch' && (inputs.deploy || inputs.plan_release)
+    if: github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && (inputs.deploy || inputs.plan_release))
     runs-on: ubuntu-latest
     timeout-minutes: 110
     environment: dev
@@ -121,7 +137,7 @@ jobs:
       - name: Run dev
         env:
           HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-          PROVIDER: ${{ inputs.dev_provider }}
+          PROVIDER: ${{ inputs.dev_provider || 'ovh' }}
           ALLOW_SWITCH: ${{ inputs.allow_switch }}
           PLAN_ONLY: ${{ inputs.plan_release }}
         run: |
@@ -159,7 +175,7 @@ jobs:
 
   prod:
     needs: staging
-    if: github.event_name == 'workflow_dispatch' && inputs.deploy_prod
+    if: github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && inputs.deploy_prod)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production
