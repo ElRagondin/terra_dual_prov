@@ -1,6 +1,14 @@
 name: Deploy dev, staging and production
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/terraform-deploy.yml'
+      - 'scripts/staging-cost.py'
+      - 'environments/staging/**'
+      - 'modules/azure/**'
+      - 'modules/ovh/**'
   workflow_dispatch:
     inputs:
       verify_hcp:
@@ -29,13 +37,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: terraform-release
+  group: ${{ github.event_name == 'pull_request' && format('finops-pr-{0}', github.event.pull_request.number) || 'terraform-release' }}
   cancel-in-progress: false
 
 jobs:
   estimate:
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
+    env:
+      INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
     permissions:
       contents: read
       actions: read
@@ -52,12 +64,19 @@ jobs:
             -f head_sha="$GITHUB_SHA" -f event=push -f branch=main \
             --jq '[.workflow_runs[] | select(.conclusion == "success")] | length' \
             | grep -Ex '[1-9][0-9]*'
+      - name: Report missing Infracost API key
+        if: env.INFRACOST_API_KEY == ''
+        run: |
+          echo 'Tarif Azure non vérifié : secret INFRACOST_API_KEY absent.' >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then exit 1; fi
       - uses: infracost/actions/setup@v3
+        if: env.INFRACOST_API_KEY != ''
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
           currency: EUR
       - name: Compare staging prices
         id: cost
+        if: env.INFRACOST_API_KEY != ''
         run: |
           infracost breakdown \
             --path environments/staging/azure \
@@ -83,7 +102,7 @@ jobs:
 
   dev:
     needs: [estimate, preflight]
-    if: inputs.deploy
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy
     runs-on: ubuntu-latest
     timeout-minutes: 110
     environment: dev
@@ -122,7 +141,7 @@ jobs:
 
   prod:
     needs: staging
-    if: inputs.deploy_prod
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_prod
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production
