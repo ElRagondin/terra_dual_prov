@@ -174,26 +174,3 @@ jobs:
           flags=()
           if [[ "$PLAN_ONLY" == true ]]; then flags+=(--plan-only); fi
           python3 scripts/hcp-release.py prod ovh "${flags[@]}"
-
-  hcp-readiness:
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feature/finops-hcp-pipeline'
-    needs: estimate
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Rehearse the release with HCP plan-only runs
-        env:
-          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-          PROVIDER: ${{ needs.estimate.outputs.staging_provider }}
-        run: |
-          python -u - <<'PY'
-          import os
-          import runpy
-          hcp = runpy.run_path("scripts/hcp-release.py")
-          hcp["preflight"](True)
-          for environment, provider in (("dev", "ovh"), ("staging", os.environ["PROVIDER"]), ("prod", "ovh")):
-              hcp["deploy"](environment, provider, False, plan_only=True)
-          PY
