@@ -69,11 +69,16 @@ def managed_count(name):
     if endpoint.scheme != "https" or endpoint.hostname not in {"app.terraform.io", "archivist.terraform.io"}:
         raise ValueError("Unexpected HCP state download host")
     # State can contain secrets. Read in memory only, never log or upload it.
+    request = Request(url)
+    if endpoint.hostname == "app.terraform.io":
+        request.add_unredirected_header("Authorization", "Bearer " + os.environ["HCP_TERRAFORM_TOKEN"].strip())
     try:
-        with urlopen(url, timeout=30) as response:
+        with urlopen(request, timeout=30) as response:
             resources = json.load(response)["resources"]
-    except Exception:
-        raise RuntimeError(f"{name}: could not read current HCP state") from None
+    except HTTPError as error:
+        raise RuntimeError(f"{name}: HCP state download returned HTTP {error.code}") from None
+    except Exception as error:
+        raise RuntimeError(f"{name}: could not read current HCP state ({type(error).__name__})") from None
     return sum(len(resource["instances"]) for resource in resources if resource["mode"] == "managed")
 
 
