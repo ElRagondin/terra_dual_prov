@@ -134,6 +134,20 @@ class PromotionTest(unittest.TestCase):
             execute.assert_not_called()
 
 
+class StagingWebTest(unittest.TestCase):
+    def test_reads_outputs_from_workspace_after_apply(self):
+        before = {"attributes": {"name": "staging-azure"}}
+        after = {"id": "ws-staging", "attributes": {"name": "staging-azure"}}
+        state = {"outputs": {"web_url": {"value": "http://8.8.8.8"}}}
+        responses = [Mock(returncode=0, stdout="ok\n"), Mock(returncode=0, stdout="<h1>web</h1>")]
+        with patch.multiple(release, workspace=Mock(return_value=after),
+                            read_state=Mock(return_value=state)), patch.object(
+                                release.subprocess, "run", side_effect=responses):
+            release.check_staging_web(before, "azure")
+            release.workspace.assert_called_once_with("staging-azure")
+            release.read_state.assert_called_once_with(after)
+
+
 class HcpRunTest(unittest.TestCase):
     workspace = {"id": "ws-staging", "attributes": {"name": "staging-azure"}}
 
