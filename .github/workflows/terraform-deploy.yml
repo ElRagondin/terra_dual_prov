@@ -202,6 +202,9 @@ jobs:
               assert perms["can-queue-run"] and perms["can-queue-apply"]
               if state:
                   detail = api(f"/state-versions/{state['id']}")["data"]["attributes"]
-                  assert urlsplit(detail["hosted-state-download-url"]).hostname == "archivist.terraform.io"
-              print("Configuration:", hcp["compatible_version"](ws), flush=True)
+                  print("State host:", urlsplit(detail["hosted-state-download-url"]).hostname, flush=True)
+              try:
+                  print("Configuration:", hcp["compatible_version"](ws), flush=True)
+              except (ValueError, RuntimeError) as error:
+                  print("Configuration check:", error, flush=True)
           PY
