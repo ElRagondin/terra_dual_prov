@@ -1,7 +1,10 @@
 terraform {
+  required_version = ">= 1.6"
+
   required_providers {
     azurerm = {
-      source = "hashicorp/azurerm"
+      source  = "hashicorp/azurerm"
+      version = ">= 4.0"
     }
   }
 }
@@ -77,7 +80,7 @@ module "security" {
         priority    = 100
         access      = "Allow"
         protocol    = "Tcp"
-        source      = "Internet"
+        source      = "82.96.158.190/32"
         destination = "80"
       }
 
@@ -85,7 +88,7 @@ module "security" {
         priority    = 110
         access      = "Allow"
         protocol    = "Tcp"
-        source      = "Internet"
+        source      = "82.96.158.190/32"
         destination = "443"
       }
     }
