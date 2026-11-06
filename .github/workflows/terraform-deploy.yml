@@ -48,20 +48,12 @@ jobs:
             -f head_sha="$GITHUB_SHA" -f event=push -f branch=main \
             --jq '[.workflow_runs[] | select(.conclusion == "success")] | length' \
             | grep -Ex '[1-9][0-9]*'
-      - name: Show available OVH codes when pricing is not configured
-        if: vars.OVH_STAGING_PRICE_CODES == ''
-        run: |
-          python3 scripts/staging-cost.py --list-ovh-codes
-          echo 'Set OVH_STAGING_PRICE_CODES before running a comparison.' >&2
-          exit 1
       - uses: infracost/actions/setup@v3
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
           currency: EUR
       - name: Compare staging prices
         id: cost
-        env:
-          OVH_STAGING_PRICE_CODES: ${{ vars.OVH_STAGING_PRICE_CODES }}
         run: |
           infracost breakdown \
             --path environments/staging/azure \

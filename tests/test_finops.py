@@ -25,12 +25,14 @@ class PricingTest(unittest.TestCase):
             {"interval": 1, "intervalUnit": "hour", "capacities": ["consumption"], "price": 1_000_000}
         ]} for name in selectors]}
         self.assertEqual(cost.ovh_monthly(catalog, selectors), cost.HOURS * sum(cost.QUANTITIES.values()) / 100)
+        catalog["plans"][-1]["pricings"][0].update(interval=0, intervalUnit="none")
+        self.assertEqual(cost.ovh_monthly(catalog, selectors), cost.HOURS * sum(cost.QUANTITIES.values()) / 100)
         catalog["plans"].pop()
         with self.assertRaisesRegex(ValueError, "Missing or ambiguous"):
             cost.ovh_monthly(catalog, selectors)
 
     def test_azure_requires_all_billable_resources(self):
-        resources = [{"resourceType": kind, "monthlyCost": "1", "subresources": [{"monthlyCost": "0.5"}]}
+        resources = [{"resourceType": kind, "monthlyCost": "1", "costComponents": [{"monthlyCost": "0.5"}], "subresources": [{"monthlyCost": "0.5"}]}
                      for kind, count in cost.AZURE_COUNTS.items() for _ in range(count)]
         report = {"currency": "EUR", "totalMonthlyCost": "6", "projects": [{"breakdown": {"resources": resources}}]}
         with tempfile.TemporaryDirectory() as directory:
