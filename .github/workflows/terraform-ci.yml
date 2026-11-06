@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: aquasecurity/trivy-action@master
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: .
@@ -71,3 +71,13 @@ jobs:
           curl -sLO "https://releases.hashicorp.com/tfpolicy/${VER}/tfpolicy_${VER}_linux_amd64.zip"
           unzip -o "tfpolicy_${VER}_linux_amd64.zip" tfpolicy
           ./tfpolicy validate --policies=policies
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.1
+      - run: ./tests/run-all.sh

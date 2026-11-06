@@ -12,3 +12,4 @@ secrets.tfvars
 # Plans Terraform
 *.tfplan
 tfplan
+modules/**/.terraform.lock.hcl
