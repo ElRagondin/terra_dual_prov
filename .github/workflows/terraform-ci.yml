@@ -60,3 +60,14 @@ jobs:
           scan-ref: .
           severity: HIGH,CRITICAL
           exit-code: "1"
+
+  policies:
+    name: Policies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          VER=0.5.0
+          curl -sLO "https://releases.hashicorp.com/tfpolicy/${VER}/tfpolicy_${VER}_linux_amd64.zip"
+          unzip -o "tfpolicy_${VER}_linux_amd64.zip" tfpolicy
+          ./tfpolicy validate --policies=policies
