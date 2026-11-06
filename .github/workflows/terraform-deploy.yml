@@ -174,3 +174,34 @@ jobs:
           flags=()
           if [[ "$PLAN_ONLY" == true ]]; then flags+=(--plan-only); fi
           python3 scripts/hcp-release.py prod ovh "${flags[@]}"
+
+  hcp-readiness:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feature/finops-hcp-pipeline'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify HCP token and workspace metadata without mutating HCP
+        env:
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import runpy
+          from urllib.parse import urlsplit
+          hcp = runpy.run_path("scripts/hcp-release.py")
+          api = hcp["api"]
+          for name in ("dev-azure", "dev-ovh", "staging-azure", "staging-ovh", "prod-ovh"):
+              ws = api(f"/organizations/terra_dual_prov/workspaces/{name}")["data"]
+              attrs = ws["attributes"]
+              perms = attrs["permissions"]
+              state = ws["relationships"]["current-state-version"]["data"]
+              print(name, "auto-apply:", attrs["auto-apply"], "run/apply:",
+                    perms.get("can-queue-run"), perms.get("can-queue-apply"),
+                    "resource-count:", attrs["resource-count"], flush=True)
+              assert perms["can-queue-run"] and perms["can-queue-apply"]
+              if state:
+                  detail = api(f"/state-versions/{state['id']}")["data"]["attributes"]
+                  assert urlsplit(detail["hosted-state-download-url"]).hostname == "archivist.terraform.io"
+              print("Configuration:", hcp["compatible_version"](ws), flush=True)
+          PY
