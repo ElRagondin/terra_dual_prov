@@ -1,7 +1,10 @@
 terraform {
+  required_version = ">= 1.6"
+
   required_providers {
     azurerm = {
-      source = "hashicorp/azurerm"
+      source  = "hashicorp/azurerm"
+      version = ">= 4.0"
     }
   }
 }
@@ -61,7 +64,7 @@ resource "azurerm_lb_probe" "http" {
   loadbalancer_id = azurerm_lb.this.id
   protocol        = "Http"
   port            = 80
-  request_path = "/health"
+  request_path    = "/health"
 }
 
 resource "azurerm_lb_rule" "http" {
