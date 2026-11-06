@@ -15,6 +15,10 @@ on:
         description: Verify workspace access and state without deploying
         type: boolean
         default: false
+      plan_release:
+        description: Rehearse dev, staging and optional production with speculative plans
+        type: boolean
+        default: false
       deploy:
         description: Apply the release after estimating staging costs
         type: boolean
@@ -29,7 +33,7 @@ on:
         type: boolean
         default: false
       deploy_prod:
-        description: Promote to OVH production after staging succeeds
+        description: Include OVH production after staging succeeds
         type: boolean
         default: false
 
@@ -55,8 +59,13 @@ jobs:
       staging_provider: ${{ steps.cost.outputs.provider }}
     steps:
       - uses: actions/checkout@v4
+      - name: Select one release mode
+        if: inputs.plan_release && inputs.deploy
+        run: |
+          echo "Choose plan_release or deploy, not both." >&2
+          exit 1
       - name: Verify Terraform CI for this revision
-        if: inputs.deploy
+        if: inputs.deploy || inputs.plan_release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -82,7 +91,7 @@ jobs:
           fi
 
   preflight:
-    if: github.ref == 'refs/heads/main' && (inputs.deploy || inputs.verify_hcp)
+    if: github.ref == 'refs/heads/main' && (inputs.deploy || inputs.plan_release || inputs.verify_hcp)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -100,7 +109,7 @@ jobs:
 
   dev:
     needs: [estimate, preflight]
-    if: github.event_name == 'workflow_dispatch' && inputs.deploy
+    if: github.event_name == 'workflow_dispatch' && (inputs.deploy || inputs.plan_release)
     runs-on: ubuntu-latest
     timeout-minutes: 110
     environment: dev
@@ -108,14 +117,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Deploy dev
+      - name: Run dev
         env:
           HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
           PROVIDER: ${{ inputs.dev_provider }}
           ALLOW_SWITCH: ${{ inputs.allow_switch }}
+          PLAN_ONLY: ${{ inputs.plan_release }}
         run: |
           flags=()
-          if [[ "$ALLOW_SWITCH" == true ]]; then flags+=(--allow-switch); fi
+          if [[ "$PLAN_ONLY" == true ]]; then
+            flags+=(--plan-only)
+          elif [[ "$ALLOW_SWITCH" == true ]]; then
+            flags+=(--allow-switch)
+          fi
           python3 scripts/hcp-release.py dev "$PROVIDER" "${flags[@]}"
 
   staging:
@@ -127,14 +141,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Deploy the lowest-cost staging
+      - name: Run the lowest-cost staging
         env:
           HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
           PROVIDER: ${{ needs.estimate.outputs.staging_provider }}
           ALLOW_SWITCH: ${{ inputs.allow_switch }}
+          PLAN_ONLY: ${{ inputs.plan_release }}
         run: |
           flags=()
-          if [[ "$ALLOW_SWITCH" == true ]]; then flags+=(--allow-switch); fi
+          if [[ "$PLAN_ONLY" == true ]]; then
+            flags+=(--plan-only)
+          elif [[ "$ALLOW_SWITCH" == true ]]; then
+            flags+=(--allow-switch)
+          fi
           python3 scripts/hcp-release.py staging "$PROVIDER" "${flags[@]}"
 
   prod:
@@ -147,7 +166,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Promote to OVH production
+      - name: Run OVH production
         env:
           HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-        run: python3 scripts/hcp-release.py prod ovh
+          PLAN_ONLY: ${{ inputs.plan_release }}
+        run: |
+          flags=()
+          if [[ "$PLAN_ONLY" == true ]]; then flags+=(--plan-only); fi
+          python3 scripts/hcp-release.py prod ovh "${flags[@]}"

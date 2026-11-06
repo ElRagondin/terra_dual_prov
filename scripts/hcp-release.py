@@ -169,11 +169,11 @@ def execute(ws, version, *, operation, before_apply=None):
     raise TimeoutError(f"{name}: run {run_id} did not finish; check HCP before retrying")
 
 
-def deploy(env, provider, allow_switch):
+def deploy(env, provider, allow_switch, *, plan_only=False):
     if env == "prod":
         target = workspace("prod-ovh")
-        execute(target, compatible_version(target), operation="deploy")
-        if not managed_count("prod-ovh"):
+        execute(target, compatible_version(target), operation="preview" if plan_only else "deploy")
+        if not plan_only and not managed_count("prod-ovh"):
             raise ValueError("prod-ovh is still empty after deployment")
         return
 
@@ -186,6 +186,9 @@ def deploy(env, provider, allow_switch):
     other = "ovh" if provider == "azure" else "azure"
     target = workspace(names[provider])
     version = compatible_version(target)
+    if plan_only:
+        execute(target, version, operation="preview")
+        return
     if states[other]:
         if not allow_switch:
             raise ValueError(f"{names[other]} is active; switching requires allow_switch")
@@ -242,7 +245,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("environment", choices=("dev", "staging", "prod", "preflight"))
     parser.add_argument("provider", nargs="?", choices=("azure", "ovh", "tie"))
-    parser.add_argument("--allow-switch", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--allow-switch", action="store_true")
+    mode.add_argument("--plan-only", action="store_true")
     parser.add_argument("--include-prod", action="store_true")
     args = parser.parse_args()
     if os.environ["GITHUB_REF"] != "refs/heads/main":
@@ -254,7 +259,7 @@ def main():
         parser.error("Choose a provider for deployment")
     if args.environment == "prod" and args.provider != "ovh":
         parser.error("Production is fixed to OVH")
-    deploy(args.environment, args.provider, args.allow_switch)
+    deploy(args.environment, args.provider, args.allow_switch, plan_only=args.plan_only)
 
 
 if __name__ == "__main__":

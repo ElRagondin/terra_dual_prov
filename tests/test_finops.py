@@ -105,6 +105,23 @@ class PromotionTest(unittest.TestCase):
                 release.deploy("staging", "azure", False)
             release.execute.assert_not_called()
 
+    def test_rehearsal_previews_winner_without_destroying_active_provider(self):
+        states = {"staging-azure": 24, "staging-ovh": 0}
+        with patch.multiple(release, managed_count=states.__getitem__,
+                            workspace=lambda name: name,
+                            compatible_version=lambda name: "cv",
+                            execute=Mock()):
+            release.deploy("staging", "ovh", False, plan_only=True)
+            release.execute.assert_called_once_with("staging-ovh", "cv", operation="preview")
+
+    def test_production_rehearsal_never_applies(self):
+        with patch.multiple(release, workspace=lambda name: name,
+                            compatible_version=lambda name: "cv",
+                            execute=Mock(), managed_count=Mock()):
+            release.deploy("prod", "ovh", False, plan_only=True)
+            release.execute.assert_called_once_with("prod-ovh", "cv", operation="preview")
+            release.managed_count.assert_not_called()
+
     def test_both_active_is_rejected(self):
         with patch.object(release, "managed_count", return_value=1), patch.object(release, "execute") as execute:
             with self.assertRaisesRegex(ValueError, "both providers"):
