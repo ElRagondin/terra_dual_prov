@@ -8,7 +8,7 @@ ORG="terra_dual_prov"
 VARSET_NAME="openstack-gra11"
 WORKSPACES=("dev-ovh" "staging-ovh")
 API="https://app.terraform.io/api/v2"
-TOKEN=$(jq -r '.credentials["app.terraform.io"].token' ~/.terraform.d/credentials.tfrc.json)
+TOKEN="${TF_TOKEN_app_terraform_io:-$(vault kv get -field=token secret/terra/hcp)}"
 H=(-H "Authorization: Bearer $TOKEN" -H "Content-Type: application/vnd.api+json")
 
 : "${OS_USERNAME:?Charger d'abord ~/.secrets/openrc.sh}"
