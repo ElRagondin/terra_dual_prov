@@ -23,9 +23,9 @@ module "stack" {
 
   name_prefix = "myapp-staging"
   # Taille Standard_B2ats_v2 validée dans cette région.
-  location    = "spaincentral"
-  vnet_cidr   = "10.11.0.0/16"
-  public_key  = var.public_key
+  location   = "spaincentral"
+  vnet_cidr  = "10.11.0.0/16"
+  public_key = var.public_key
 
   subnets = {
     web = { cidr = "10.11.1.0/24" }
