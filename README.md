@@ -23,3 +23,7 @@ Déploiement d'une infrastructure multi-environnement (dev, staging, prod) et mu
     terraform init
     terraform plan
     terraform apply
+
+## Déploiement et FinOps
+
+Voir le [guide de la pipeline dev → staging → prod](docs/finops.md).

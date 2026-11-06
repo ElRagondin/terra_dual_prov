@@ -1,0 +1,123 @@
+name: Deploy dev, staging and production
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Apply the release after estimating staging costs
+        type: boolean
+        default: false
+      dev_provider:
+        description: Development provider
+        type: choice
+        options: [azure, ovh]
+        default: azure
+      allow_switch:
+        description: Allow destruction of the old dev or staging when switching providers
+        type: boolean
+        default: false
+      deploy_prod:
+        description: Promote to OVH production after staging succeeds
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-release
+  cancel-in-progress: false
+
+jobs:
+  estimate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      staging_provider: ${{ steps.cost.outputs.provider }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Terraform CI for this revision
+        if: inputs.deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/terraform-ci.yml/runs" \
+            -f head_sha="$GITHUB_SHA" -f event=push -f branch=main \
+            --jq '[.workflow_runs[] | select(.conclusion == "success")] | length' \
+            | grep -Ex '[1-9][0-9]*'
+      - name: Show available OVH codes when pricing is not configured
+        if: vars.OVH_STAGING_PRICE_CODES == ''
+        run: |
+          python3 scripts/staging-cost.py --list-ovh-codes
+          echo 'Set OVH_STAGING_PRICE_CODES before running a comparison.' >&2
+          exit 1
+      - uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+          currency: EUR
+      - name: Compare staging prices
+        id: cost
+        env:
+          OVH_STAGING_PRICE_CODES: ${{ vars.OVH_STAGING_PRICE_CODES }}
+        run: |
+          infracost breakdown \
+            --path environments/staging/azure \
+            --format json --out-file "$RUNNER_TEMP/azure-cost.json"
+          python3 scripts/staging-cost.py "$RUNNER_TEMP/azure-cost.json"
+
+  dev:
+    needs: estimate
+    if: inputs.deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Deploy dev
+        env:
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          PROVIDER: ${{ inputs.dev_provider }}
+          ALLOW_SWITCH: ${{ inputs.allow_switch }}
+        run: |
+          flags=()
+          if [[ "$ALLOW_SWITCH" == true ]]; then flags+=(--allow-switch); fi
+          python3 scripts/hcp-release.py dev "$PROVIDER" "${flags[@]}"
+
+  staging:
+    needs: [estimate, dev]
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Deploy the lowest-cost staging
+        env:
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          PROVIDER: ${{ needs.estimate.outputs.staging_provider }}
+          ALLOW_SWITCH: ${{ inputs.allow_switch }}
+        run: |
+          flags=()
+          if [[ "$ALLOW_SWITCH" == true ]]; then flags+=(--allow-switch); fi
+          python3 scripts/hcp-release.py staging "$PROVIDER" "${flags[@]}"
+
+  prod:
+    needs: staging
+    if: inputs.deploy_prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Promote to OVH production
+        env:
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+        run: python3 scripts/hcp-release.py prod ovh

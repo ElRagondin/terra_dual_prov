@@ -81,3 +81,4 @@ jobs:
         with:
           terraform_version: 1.17.1
       - run: ./tests/run-all.sh
+      - run: python3 -m unittest discover -s tests -p test_finops.py
