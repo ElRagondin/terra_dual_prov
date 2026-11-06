@@ -194,7 +194,8 @@ def staging_variables(provider):
 
 def check_staging_web(target, provider):
     output = "web_url" if provider == "azure" else "app_url"
-    address = urlsplit(read_state(target)["outputs"][output]["value"])
+    current = workspace(target["attributes"]["name"])
+    address = urlsplit(read_state(current)["outputs"][output]["value"])
     host = ipaddress.IPv4Address(address.hostname)
     if not host.is_global:
         raise ValueError("The staging load balancer needs a public IPv4 address")
