@@ -96,8 +96,8 @@ jobs:
           for group in ("plans", "addons"):
               for row in catalog.get(group, []):
                   code = row.get("planCode", "")
-                  if re.search(r"^(c3-4[.\-]|.*(load.?balancer|floating|octavia|block.?storage|local.?storage|volume.?classic|classic.?volume|ipv4).*)", code, re.I):
+                  if re.search(r'c3-4|disk|storage|volume|classic|load|balance|float|octavia|ipv4|(^|[.-])ip([.-]|$)|(^|[.-])lb([.-]|$)', code, re.I):
                       for price in row.get("pricings", []):
-                          if price.get("intervalUnit") == "hour":
-                              print(code, price.get("price"), price.get("interval"), price.get("capacities"), price.get("description"))
+                          if "consumption" in price.get("capacities", []):
+                              print("RATE", code, price.get("price"), price.get("interval"), price.get("intervalUnit"), row.get("productName"))
           PY
