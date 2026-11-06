@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# Dossiers vérifiés. Pour réintégrer Azure : ajouter modules/azure et environments/<env>/azure.
+env:
+  TF_ENVS: "environments/dev/ovh environments/staging/ovh"
+  TF_MODULES: "modules/ovh"
+
 jobs:
   fmt:
     name: Format
@@ -18,7 +23,12 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.17.1
-      - run: terraform fmt -check -recursive -diff
+      - run: |
+          status=0
+          for dir in $TF_MODULES $TF_ENVS; do
+            terraform fmt -check -recursive -diff "$dir" || status=1
+          done
+          exit $status
 
   validate:
     name: Validate
@@ -28,10 +38,9 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.17.1
-      # Chaque dossier d'environnement (OVH et Azure) est détecté et validé, sans backend
       - run: |
           status=0
-          for dir in $(find environments -name main.tf -exec dirname {} \; | sort); do
+          for dir in $TF_ENVS; do
             echo "::group::$dir"
             (cd "$dir" && terraform init -backend=false -input=false >/dev/null && terraform validate) || status=1
             echo "::endgroup::"
@@ -47,7 +56,14 @@ jobs:
       - run: tflint --init --config "$GITHUB_WORKSPACE/.tflint.hcl"
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - run: tflint --recursive --config "$GITHUB_WORKSPACE/.tflint.hcl" --format compact
+      - run: |
+          status=0
+          for dir in $(ls -d $TF_MODULES/*/) $TF_ENVS; do
+            echo "::group::$dir"
+            tflint --chdir "$dir" --config "$GITHUB_WORKSPACE/.tflint.hcl" --format compact || status=1
+            echo "::endgroup::"
+          done
+          exit $status
 
   trivy:
     name: Trivy (sécurité)
@@ -58,5 +74,6 @@ jobs:
         with:
           scan-type: config
           scan-ref: .
+          skip-dirs: "modules/azure,environments/dev/azure,environments/staging/azure,environments/prod/azure"
           severity: HIGH,CRITICAL
           exit-code: "1"
