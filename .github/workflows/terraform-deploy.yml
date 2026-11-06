@@ -23,7 +23,7 @@ on:
         description: Development provider
         type: choice
         options: [azure, ovh]
-        default: azure
+        default: ovh
       allow_switch:
         description: Allow destruction of the old dev or staging when switching providers
         type: boolean
@@ -76,35 +76,17 @@ jobs:
           import json, re
           from urllib.parse import urlencode
           from urllib.request import urlopen
-          filters = [
-              "armSkuName eq 'Standard_B2ats_v2' and priceType eq 'Consumption'",
-              "serviceName eq 'Storage' and (skuName eq 'P6 LRS' or skuName eq 'E3 LRS')",
-              "serviceName eq 'Load Balancer'",
-              "serviceName eq 'Virtual Network' and contains(meterName, 'IP')",
-          ]
-          for clause in filters:
-              url = "https://prices.azure.com/api/retail/prices?" + urlencode({
-                  "currencyCode": "'EUR'",
-                  "$filter": "armRegionName eq 'spaincentral' and (" + clause + ")",
-              })
-              with urlopen(url, timeout=30) as response:
-                  data = json.load(response)
-              for row in data["Items"]:
-                  print("METER", *(row.get(k) for k in (
-                      "productName", "skuName", "meterName", "unitOfMeasure", "retailPrice",
-                      "tierMinimumUnits", "type", "currencyCode",
-                  )), sep=" | ")
-          for clause in ("contains(meterName, 'First 5')", "serviceName eq 'Load Balancer'"):
+          for clause in ("serviceName eq 'Load Balancer'",):
               url = "https://prices.azure.com/api/retail/prices?" + urlencode({
                   "currencyCode": "'EUR'", "$filter": clause,
               })
               with urlopen(url, timeout=30) as response:
                   data = json.load(response)
               rows = data["Items"]
-              print("LB_COUNT", clause, len(rows), bool(data["NextPageLink"]))
+              print("LB_COUNT", clause, len(rows), bool(data.get("NextPageLink")))
               for row in rows:
-                  if re.search(r'first|spain|zone 1', " ".join(str(row.get(k, "")) for k in (
-                      "meterName", "armRegionName", "location",
+                  if re.search(r'first|spain|zone 1|regional|standard', " ".join(str(row.get(k, "")) for k in (
+                      "meterName", "armRegionName", "location", "skuName",
                   )), re.I):
                       print("LB_RATE", *(row.get(k) for k in (
                           "armRegionName", "location", "productName", "meterName", "unitOfMeasure",
