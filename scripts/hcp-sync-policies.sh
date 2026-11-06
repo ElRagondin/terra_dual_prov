@@ -10,7 +10,7 @@ SET_NAME="securite-et-couts"
 SET_DESC="Tailles de VM, SSH public et taille des volumes (OVH et Azure) - synchronisé depuis Git"
 POLICY_DIR="policies"
 API="https://app.terraform.io/api/v2"
-TOKEN="${TFE_TOKEN:-$(jq -r '.credentials["app.terraform.io"].token' ~/.terraform.d/credentials.tfrc.json)}"
+TOKEN="${TF_TOKEN_app_terraform_io:-$(vault kv get -field=token secret/terra/hcp)}"
 AUTH=(-H "Authorization: Bearer $TOKEN")
 JSON=(-H "Content-Type: application/vnd.api+json")
 
