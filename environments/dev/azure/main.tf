@@ -14,8 +14,9 @@ provider "azurerm" {
 }
 
 variable "location" {
-  type    = string
-  default = "denmarkeast"
+  description = "Région Azure du déploiement de développement."
+  type        = string
+  default     = "denmarkeast"
 }
 
 locals {
