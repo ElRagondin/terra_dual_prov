@@ -22,7 +22,7 @@ module "stack" {
   source = "../../../modules/azure/stack"
 
   name_prefix = "myapp-staging"
-  location    = "northeurope"
+  location    = "spaincentral"
   vnet_cidr   = "10.11.0.0/16"
   public_key  = var.public_key
 
