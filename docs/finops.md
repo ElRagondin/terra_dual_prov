@@ -12,7 +12,7 @@ Le mode par défaut (`deploy=false`) affiche les coûts. Cochez `verify_hcp` pou
 ## Configuration initiale
 
 - Secret GitHub facultatif **`INFRACOST_API_KEY`** : clé d'API Infracost. Sans clé, le workflow utilise les tarifs publics Azure.
-- Secret GitHub **`HCP_TERRAFORM_TOKEN`** : jeton d'équipe HCP avec accès aux cinq workspaces, lecture de l'état et droits de plan, apply et discard. Utilisez un secret d'environnement distinct pour la prod si les droits sont séparés.
+- Secret GitHub **`HCP_TERRAFORM_TOKEN`** : jeton d'équipe HCP avec accès aux cinq workspaces, lecture de l'état et droits de plan, apply et discard. Si l'offre HCP ne permet pas une équipe dédiée, utilisez un jeton utilisateur à durée limitée, avec les droits nécessaires. Utilisez un secret d'environnement distinct pour la prod si les droits sont séparés.
 - Dans HCP, conservez les connexions VCS sur **main** et le dossier Terraform de chaque workspace : `environments/dev/azure`, `environments/dev/ovh`, `environments/staging/azure`, `environments/staging/ovh`, `environments/prod/ovh`. Vérifiez les identifiants cloud existants et la clé SSH de chacun.
 - Désactivez les deux options **Auto-apply** et l'auto-destroy dans ces workspaces. Activez **Allow destroy plans** sur les quatre workspaces dev et staging si les bascules sont autorisées.
 

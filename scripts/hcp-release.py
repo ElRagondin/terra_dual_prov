@@ -18,8 +18,11 @@ FAILED = {"errored", "canceled", "force_canceled", "discarded", "policy_soft_fai
 
 def api(path, payload=None, *, optional=False):
     data = None if payload is None else json.dumps(payload).encode()
+    token = os.environ.get("HCP_TERRAFORM_TOKEN", "").strip()
+    if not token:
+        raise ValueError("GitHub Actions secret HCP_TERRAFORM_TOKEN is missing")
     request = Request(HOST + "/api/v2" + path, data=data, headers={
-        "Authorization": "Bearer " + os.environ["HCP_TERRAFORM_TOKEN"],
+        "Authorization": "Bearer " + token,
         "Content-Type": "application/vnd.api+json",
     })
     try:
@@ -45,6 +48,9 @@ def workspace(name):
         raise ValueError(f"{name}: expected a VCS workspace linked to this repository and main")
     if attrs["auto-apply"] or attrs.get("auto-apply-run-trigger"):
         raise ValueError(f"{name}: disable both auto-apply settings before using this pipeline")
+    permissions = attrs["permissions"]
+    if not (permissions.get("can-queue-run") and permissions.get("can-queue-apply")):
+        raise ValueError(f"{name}: HCP token needs permission to queue and apply runs")
     if attrs.get("auto-destroy-at") or attrs.get("auto-destroy-activity-duration"):
         raise ValueError(f"{name}: disable automatic destruction before using this pipeline")
     return item
@@ -184,6 +190,8 @@ def deploy(env, provider, allow_switch):
         if not allow_switch:
             raise ValueError(f"{names[other]} is active; switching requires allow_switch")
         old = workspace(names[other])
+        if not old["attributes"]["allow-destroy-plan"]:
+            raise ValueError(f"{names[other]}: enable Allow destroy plans before switching")
         old_version = compatible_version(old)
         execute(target, version, operation="preview")
         execute(old, old_version, operation="destroy")

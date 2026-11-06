@@ -91,7 +91,7 @@ class PromotionTest(unittest.TestCase):
             execute(workspace["id"], *args, **kwargs)
 
         with patch.multiple(release, managed_count=state.__getitem__,
-                            workspace=lambda name: {"id": name},
+                            workspace=lambda name: {"id": name, "attributes": {"allow-destroy-plan": True}},
                             compatible_version=lambda workspace: "cv", execute=invoke,
                             drain_vcs_plans=Mock(), api=Mock(return_value={"data": []})):
             release.deploy("staging", "azure", True)
@@ -110,6 +110,37 @@ class PromotionTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "both providers"):
                 release.deploy("staging", "azure", True)
             execute.assert_not_called()
+
+
+class HcpRunTest(unittest.TestCase):
+    workspace = {"id": "ws-staging", "attributes": {"name": "staging-azure"}}
+
+    def test_preview_never_confirms_apply(self):
+        api = Mock(side_effect=[
+            {"data": {"id": "run-preview"}},
+            {"data": {"attributes": {"status": "planned_and_finished"}}},
+        ])
+        with patch.object(release, "api", api), patch.dict(release.os.environ, {"GITHUB_RUN_ID": "123"}):
+            release.execute(self.workspace, "cv-preview", operation="preview")
+        payload = api.call_args_list[0].args[1]["data"]["attributes"]
+        self.assertTrue(payload["plan-only"])
+        self.assertFalse(payload["auto-apply"])
+        self.assertEqual([call.args[0] for call in api.call_args_list],
+                         ["/runs", "/runs/run-preview"])
+
+    def test_deploy_discards_a_plan_that_replaces_resources(self):
+        api = Mock(side_effect=[
+            {"data": {"id": "run-deploy"}},
+            {"data": {"attributes": {"status": "planned", "actions": {"is-confirmable": True}},
+                      "relationships": {"plan": {"data": {"id": "plan-replace"}}}}},
+            {"data": {"attributes": {"resource-destructions": 1}}},
+            None,
+        ])
+        with patch.object(release, "api", api), patch.object(release, "drain_vcs_plans"), \
+                patch.dict(release.os.environ, {"GITHUB_RUN_ID": "123"}):
+            with self.assertRaisesRegex(ValueError, "delete or replace"):
+                release.execute(self.workspace, "cv-deploy", operation="deploy")
+        self.assertEqual(api.call_args_list[-1].args[0], "/runs/run-deploy/actions/discard")
 
 
 if __name__ == "__main__":
