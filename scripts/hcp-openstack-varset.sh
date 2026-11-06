@@ -6,7 +6,7 @@ set -euo pipefail
 
 ORG="terra_dual_prov"
 VARSET_NAME="openstack-gra11"
-WORKSPACES=("dev-ovh" "staging-ovh")
+WORKSPACES=("dev-ovh" "staging-ovh" "prod-ovh")
 API="https://app.terraform.io/api/v2"
 TOKEN="${TF_TOKEN_app_terraform_io:-$(vault kv get -field=token secret/terra/hcp)}"
 H=(-H "Authorization: Bearer $TOKEN" -H "Content-Type: application/vnd.api+json")
